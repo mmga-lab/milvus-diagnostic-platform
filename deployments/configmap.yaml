@@ -1,0 +1,81 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: milvus-coredump-agent-config
+  namespace: default
+  labels:
+    app: milvus-coredump-agent
+data:
+  config.yaml: |
+    agent:
+      name: "milvus-coredump-agent"
+      namespace: "default"
+      logLevel: "info"
+      metricsPort: 8080
+      healthPort: 8081
+
+    discovery:
+      scanInterval: "30s"
+      namespaces: ["default", "milvus-system"]
+      helmReleaseLabels:
+        - "app.kubernetes.io/name=milvus"
+        - "helm.sh/chart=milvus"
+      operatorLabels:
+        - "app.kubernetes.io/managed-by=milvus-operator"
+
+    collector:
+      coredumpPath: "/var/lib/systemd/coredump"
+      hostCoredumpPath: "/host/var/lib/systemd/coredump"
+      watchInterval: "10s"
+      maxFileAge: "24h"
+      maxFileSize: "2GB"
+
+    analyzer:
+      enableGdbAnalysis: true
+      gdbTimeout: "5m"
+      valueThreshold: 7.0
+      ignorePatterns:
+        - "livenessProbe"
+        - "readinessProbe" 
+        - "startupProbe"
+      panicKeywords:
+        - "panic"
+        - "fatal"
+        - "SIGSEGV"
+        - "SIGABRT"
+        - "SIGFPE"
+        - "assertion failed"
+      
+      # AI Analysis settings
+      aiAnalysis:
+        enabled: true
+        provider: "openai"
+        model: "gpt-4"
+        apiKey: ""  # Set via environment variable OPENAI_API_KEY
+        baseURL: ""
+        timeout: "30s"
+        maxTokens: 2000
+        temperature: 0.3
+        enableCostControl: true
+        maxCostPerMonth: 100.0
+        maxAnalysisPerHour: 50
+
+    storage:
+      backend: "local"
+      localPath: "/data/coredumps"
+      maxStorageSize: "50GB"
+      retentionDays: 30
+      compressionEnabled: true
+
+    cleaner:
+      enabled: true
+      maxRestartCount: 5
+      restartTimeWindow: "1h"
+      cleanupDelay: "5m"
+      uninstallTimeout: "10m"
+      
+    monitor:
+      prometheusEnabled: true
+      alerting:
+        enabled: false
+        webhookUrl: ""

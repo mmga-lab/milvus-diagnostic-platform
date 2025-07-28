@@ -1,0 +1,88 @@
+agent:
+  # Agent configuration
+  name: "milvus-coredump-agent"
+  namespace: "default"
+  logLevel: "info"
+  metricsPort: 8080
+  healthPort: 8081
+
+discovery:
+  # Milvus instance discovery settings
+  scanInterval: "30s"
+  namespaces: ["default", "milvus-system"]
+  helmReleaseLabels:
+    - "app.kubernetes.io/name=milvus"
+    - "helm.sh/chart=milvus"
+  operatorLabels:
+    - "app.kubernetes.io/managed-by=milvus-operator"
+
+collector:
+  # Coredump collection settings
+  coredumpPath: "/var/lib/systemd/coredump"
+  hostCoredumpPath: "/host/var/lib/systemd/coredump"
+  watchInterval: "10s"
+  maxFileAge: "24h"
+  maxFileSize: "2GB"
+
+analyzer:
+  # Analysis and filtering settings
+  enableGdbAnalysis: true
+  gdbTimeout: "5m"
+  valueThreshold: 7.0  # 0-10 scale, minimum value to keep
+  ignorePatterns:
+    - "livenessProbe"
+    - "readinessProbe" 
+    - "startupProbe"
+  panicKeywords:
+    - "panic"
+    - "fatal"
+    - "SIGSEGV"
+    - "SIGABRT"
+    - "SIGFPE"
+    - "assertion failed"
+  
+  # AI Analysis settings
+  aiAnalysis:
+    enabled: true
+    provider: "openai"  # openai, azure, anthropic
+    model: "gpt-4"
+    apiKey: ""  # Set via environment variable OPENAI_API_KEY
+    baseURL: ""  # Optional: custom API endpoint
+    timeout: "30s"
+    maxTokens: 2000
+    temperature: 0.3
+    # Cost control
+    enableCostControl: true
+    maxCostPerMonth: 100.0  # USD
+    maxAnalysisPerHour: 50
+
+storage:
+  # Storage configuration
+  backend: "local"  # local, s3, nfs
+  localPath: "/data/coredumps"
+  maxStorageSize: "50GB"
+  retentionDays: 30
+  compressionEnabled: true
+  
+  # S3 configuration (if backend is s3)
+  s3:
+    bucket: ""
+    region: ""
+    endpoint: ""
+    accessKey: ""
+    secretKey: ""
+
+cleaner:
+  # Auto cleanup settings
+  enabled: true
+  maxRestartCount: 5
+  restartTimeWindow: "1h"
+  cleanupDelay: "5m"
+  uninstallTimeout: "10m"
+  
+monitor:
+  # Monitoring and alerting
+  prometheusEnabled: true
+  alerting:
+    enabled: true
+    webhookUrl: ""

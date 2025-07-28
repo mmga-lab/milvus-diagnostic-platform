@@ -1,0 +1,147 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: milvus-coredump-agent
+  namespace: default
+  labels:
+    app: milvus-coredump-agent
+spec:
+  selector:
+    matchLabels:
+      app: milvus-coredump-agent
+  template:
+    metadata:
+      labels:
+        app: milvus-coredump-agent
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: milvus-coredump-agent
+      hostNetwork: true
+      hostPID: true
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        operator: Exists
+        effect: NoSchedule
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+      containers:
+      - name: agent
+        image: milvus-coredump-agent:latest
+        imagePullPolicy: Always
+        command:
+        - /bin/milvus-coredump-agent
+        - --config=/etc/agent/config.yaml
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        # AI Analysis configuration
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: milvus-coredump-agent-secrets
+              key: openai-api-key
+              optional: true
+        - name: OPENAI_BASE_URL
+          value: ""  # Optional: set custom OpenAI endpoint
+        ports:
+        - containerPort: 8080
+          name: metrics
+          protocol: TCP
+        - containerPort: 8081
+          name: health
+          protocol: TCP
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: health
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: health
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        securityContext:
+          privileged: true
+          runAsUser: 0
+        volumeMounts:
+        - name: config
+          mountPath: /etc/agent
+          readOnly: true
+        - name: host-coredump
+          mountPath: /host/var/lib/systemd/coredump
+          readOnly: true
+        - name: coredump-storage
+          mountPath: /data/coredumps
+        - name: proc
+          mountPath: /host/proc
+          readOnly: true
+        - name: sys
+          mountPath: /host/sys
+          readOnly: true
+        - name: docker-sock
+          mountPath: /var/run/docker.sock
+          readOnly: true
+        - name: containerd-sock
+          mountPath: /run/containerd/containerd.sock
+          readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          name: milvus-coredump-agent-config
+      - name: host-coredump
+        hostPath:
+          path: /var/lib/systemd/coredump
+          type: DirectoryOrCreate
+      - name: coredump-storage
+        hostPath:
+          path: /opt/milvus-coredumps
+          type: DirectoryOrCreate
+      - name: proc
+        hostPath:
+          path: /proc
+          type: Directory
+      - name: sys
+        hostPath:
+          path: /sys
+          type: Directory
+      - name: docker-sock
+        hostPath:
+          path: /var/run/docker.sock
+          type: Socket
+      - name: containerd-sock
+        hostPath:
+          path: /run/containerd/containerd.sock
+          type: Socket
+      dnsPolicy: ClusterFirstWithHostNet
+      restartPolicy: Always
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
