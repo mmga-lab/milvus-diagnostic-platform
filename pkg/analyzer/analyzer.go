@@ -292,12 +292,15 @@ func (a *Analyzer) basicAnalysis(coredump *collector.CoredumpFile) (*collector.A
 }
 
 func (a *Analyzer) calculateValueScore(coredump *collector.CoredumpFile, results *collector.AnalysisResults) float64 {
-	score := 5.0 // base score
+	score := 4.0 // base score (updated from 5.0 to align with documentation)
 
-	// Traditional GDB analysis scoring
+	// Rule-based scoring dimensions (AI analysis does NOT affect scoring)
+	
+	// 1. Crash reason clarity (+2.0)
 	if results.CrashReason != "" {
 		score += 2.0
 		
+		// Panic keywords bonus (+1.0)
 		for _, keyword := range a.config.PanicKeywords {
 			if strings.Contains(strings.ToLower(results.CrashReason), strings.ToLower(keyword)) {
 				score += 1.0
@@ -306,64 +309,37 @@ func (a *Analyzer) calculateValueScore(coredump *collector.CoredumpFile, results
 		}
 	}
 
+	// 2. Stack trace quality (+1.5)
 	if results.StackTrace != "" && len(results.StackTrace) > 100 {
 		score += 1.5
 	}
 
+	// 3. Multi-thread complexity (+0.5)
 	if results.ThreadCount > 1 {
 		score += 0.5
 	}
 
+	// 4. Pod association (+1.0)
 	if coredump.PodName != "" && coredump.InstanceName != "" {
 		score += 1.0
 	}
 
+	// 5. Signal severity (+1.0)
 	if coredump.Signal == 11 || coredump.Signal == 6 || coredump.Signal == 8 {
 		score += 1.0
 	}
 
+	// 6. File size (+0.5) - larger files contain more information
 	if coredump.Size > 100*1024*1024 {
 		score += 0.5
 	}
 
+	// 7. Freshness (+0.5) - recent crashes are more valuable
 	if time.Since(coredump.ModTime) < time.Hour {
 		score += 0.5
 	}
 
-	// AI analysis bonus scoring
-	if results.AIAnalysis != nil && results.AIAnalysis.Enabled && results.AIAnalysis.ErrorMessage == "" {
-		// High confidence AI analysis adds significant value
-		if results.AIAnalysis.Confidence > 0.8 {
-			score += 1.5
-		} else if results.AIAnalysis.Confidence > 0.6 {
-			score += 1.0
-		} else if results.AIAnalysis.Confidence > 0.4 {
-			score += 0.5
-		}
-
-		// Actionable recommendations boost value
-		if len(results.AIAnalysis.Recommendations) > 0 {
-			score += 0.5
-		}
-
-		// Code suggestions indicate concrete actionable insights
-		if len(results.AIAnalysis.CodeSuggestions) > 0 {
-			score += 0.5
-			// High priority suggestions add more value
-			for _, suggestion := range results.AIAnalysis.CodeSuggestions {
-				if suggestion.Priority == "high" {
-					score += 0.3
-					break
-				}
-			}
-		}
-
-		// Related issues suggest this is a known problem pattern
-		if len(results.AIAnalysis.RelatedIssues) > 0 {
-			score += 0.3
-		}
-	}
-
+	// Cap the score at 10.0
 	if score > 10.0 {
 		score = 10.0
 	}

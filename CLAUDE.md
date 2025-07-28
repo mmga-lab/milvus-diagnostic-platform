@@ -109,15 +109,25 @@ The discovery system identifies Milvus instances through Kubernetes labels:
 
 ## Value Scoring Algorithm
 
-The analyzer calculates coredump value scores (0-10) based on:
-- Crash reason analysis (panic keywords detection)
-- Stack trace quality and length  
-- Signal type (SIGSEGV=11, SIGABRT=6, etc.)
-- File freshness and size
-- Pod/instance association
-- **AI Analysis Results**: High-confidence AI analysis adds significant value (+1.5 for >0.8 confidence)
+The analyzer calculates coredump value scores (0-10) using a **rule-based system only**. AI analysis does NOT participate in scoring but is applied to files that pass the threshold.
 
-Files below the `valueThreshold` are automatically skipped for storage.
+### Scoring Dimensions
+- **Base score**: 4.0 points
+- **Crash reason clarity**: +2.0 (clear crash reason identified)
+- **Panic keywords**: +1.0 (contains panic/fatal/SIGSEGV etc.)
+- **Stack trace quality**: +1.5 (>100 characters of stack trace)
+- **Multi-thread complexity**: +0.5 (thread count > 1)
+- **Pod association**: +1.0 (linked to specific Pod/instance)
+- **Signal severity**: +1.0 (SIGSEGV=11, SIGABRT=6, SIGFPE=8)
+- **File size**: +0.5 (>100MB, contains more info)
+- **Freshness**: +0.5 (<1 hour old)
+
+### Scoring Flow
+```
+GDB Analysis → Rule-based Scoring → Threshold Check → Storage Decision → Optional AI Analysis
+```
+
+Files below the `valueThreshold` (default 7.0) are automatically skipped for storage.
 
 ## AI-Powered Analysis
 
