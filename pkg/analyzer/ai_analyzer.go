@@ -1,15 +1,17 @@
 package analyzer
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/sashabaranov/go-openai"
 	"k8s.io/klog/v2"
 
 	"milvus-coredump-agent/pkg/collector"
@@ -18,13 +20,46 @@ import (
 
 type AIAnalyzer struct {
 	config        *config.AIAnalysisConfig
-	client        *openai.Client
+	httpClient    *http.Client
 	
 	// Cost control
 	mu            sync.RWMutex
 	monthlyUsage  float64
 	hourlyCount   int
 	lastHourReset time.Time
+}
+
+// GLM API request/response structures
+type GLMChatRequest struct {
+	Model       string       `json:"model"`
+	Messages    []GLMMessage `json:"messages"`
+	Temperature float64      `json:"temperature"`
+	MaxTokens   int          `json:"max_tokens"`
+}
+
+type GLMMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+type GLMChatResponse struct {
+	ID      string      `json:"id"`
+	Model   string      `json:"model"`
+	Created int64       `json:"created"`
+	Choices []GLMChoice `json:"choices"`
+	Usage   GLMUsage    `json:"usage"`
+}
+
+type GLMChoice struct {
+	Index        int        `json:"index"`
+	Message      GLMMessage `json:"message"`
+	FinishReason string     `json:"finish_reason"`
+}
+
+type GLMUsage struct {
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+	TotalTokens      int `json:"total_tokens"`
 }
 
 func NewAIAnalyzer(config *config.AIAnalysisConfig) (*AIAnalyzer, error) {
@@ -34,29 +69,34 @@ func NewAIAnalyzer(config *config.AIAnalysisConfig) (*AIAnalyzer, error) {
 
 	apiKey := config.APIKey
 	if apiKey == "" {
-		apiKey = os.Getenv("OPENAI_API_KEY")
+		// Try environment variable for GLM
+		apiKey = os.Getenv("GLM_API_KEY")
 	}
 	
 	if apiKey == "" {
-		return nil, fmt.Errorf("OpenAI API key not provided")
+		return nil, fmt.Errorf("GLM API key not provided")
 	}
 
-	clientConfig := openai.DefaultConfig(apiKey)
-	if config.BaseURL != "" {
-		clientConfig.BaseURL = config.BaseURL
+	// Validate required config
+	if config.BaseURL == "" {
+		return nil, fmt.Errorf("GLM API baseURL not provided")
 	}
 
-	client := openai.NewClientWithConfig(clientConfig)
+	httpClient := &http.Client{
+		Timeout: config.Timeout,
+	}
+
+	klog.Infof("Using GLM API endpoint: %s", config.BaseURL)
 
 	return &AIAnalyzer{
 		config:        config,
-		client:        client,
+		httpClient:    httpClient,
 		lastHourReset: time.Now(),
 	}, nil
 }
 
 func (ai *AIAnalyzer) AnalyzeCoredump(ctx context.Context, coredump *collector.CoredumpFile, gdbResults *collector.AnalysisResults) (*collector.AIAnalysisResult, error) {
-	if !ai.config.Enabled || ai.client == nil {
+	if !ai.config.Enabled || ai.httpClient == nil {
 		return &collector.AIAnalysisResult{
 			Enabled: false,
 		}, nil
@@ -78,27 +118,10 @@ func (ai *AIAnalyzer) AnalyzeCoredump(ctx context.Context, coredump *collector.C
 	
 	prompt := ai.buildAnalysisPrompt(coredump, gdbResults)
 	
-	chatCtx, cancel := context.WithTimeout(ctx, ai.config.Timeout)
-	defer cancel()
-
-	resp, err := ai.client.CreateChatCompletion(chatCtx, openai.ChatCompletionRequest{
-		Model:       ai.config.Model,
-		Temperature: ai.config.Temperature,
-		MaxTokens:   ai.config.MaxTokens,
-		Messages: []openai.ChatCompletionMessage{
-			{
-				Role:    openai.ChatMessageRoleSystem,
-				Content: ai.getSystemPrompt(),
-			},
-			{
-				Role:    openai.ChatMessageRoleUser,
-				Content: prompt,
-			},
-		},
-	})
-
+	// Call GLM API
+	resp, err := ai.callGLMAPI(ctx, prompt)
 	if err != nil {
-		klog.Errorf("OpenAI API error: %v", err)
+		klog.Errorf("GLM API error: %v", err)
 		return &collector.AIAnalysisResult{
 			Enabled:      true,
 			Provider:     ai.config.Provider,
@@ -141,6 +164,74 @@ func (ai *AIAnalyzer) AnalyzeCoredump(ctx context.Context, coredump *collector.C
 		coredump.Path, analysis.CostUSD, analysis.TokensUsed, time.Since(startTime))
 
 	return analysis, nil
+}
+
+func (ai *AIAnalyzer) callGLMAPI(ctx context.Context, userPrompt string) (*GLMChatResponse, error) {
+	// Prepare request payload - match exact GLM API format
+	request := GLMChatRequest{
+		Model: ai.config.Model,
+		Messages: []GLMMessage{
+			{
+				Role:    "system",
+				Content: ai.getSystemPrompt(),
+			},
+			{
+				Role:    "user", 
+				Content: userPrompt,
+			},
+		},
+		Temperature: 0.3,     // Fixed value to match successful curl requests
+		MaxTokens:   2000,    // Fixed value to match successful curl requests
+	}
+
+	// Marshal request to JSON
+	jsonData, err := json.Marshal(request)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// Debug log the request
+	klog.Infof("GLM API request: %s", string(jsonData))
+
+	// Create HTTP request
+	req, err := http.NewRequestWithContext(ctx, "POST", ai.config.BaseURL, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+ai.config.APIKey)
+
+	// Make the request
+	resp, err := ai.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to make request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	// Debug log the response
+	klog.Infof("GLM API response status: %d", resp.StatusCode)
+	klog.Infof("GLM API response body: %s", string(body))
+
+	// Check status code
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	// Parse response
+	var glmResp GLMChatResponse
+	if err := json.Unmarshal(body, &glmResp); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	return &glmResp, nil
 }
 
 func (ai *AIAnalyzer) getSystemPrompt() string {

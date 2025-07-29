@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: set-core-pattern
+spec:
+  hostNetwork: true
+  hostPID: true
+  containers:
+  - name: pattern-setter
+    image: ubuntu:20.04
+    command: ["/bin/bash", "-c"]
+    args:
+      - |
+        echo "Current core pattern: $(cat /proc/sys/kernel/core_pattern)"
+        
+        # Try to set core pattern to agent's expected location
+        echo "Setting core pattern to /var/lib/systemd/coredump/..."
+        if echo "/var/lib/systemd/coredump/core.%e.%p.%t" > /proc/sys/kernel/core_pattern; then
+            echo "Successfully set core pattern to: $(cat /proc/sys/kernel/core_pattern)"
+        else
+            echo "Failed to set core pattern"
+            exit 1
+        fi
+        
+        # Create the directory
+        mkdir -p /var/lib/systemd/coredump
+        chmod 755 /var/lib/systemd/coredump
+        
+        echo "Core pattern configuration complete"
+    securityContext:
+      privileged: true
+    volumeMounts:
+    - name: proc
+      mountPath: /proc
+    - name: coredump-dir
+      mountPath: /var/lib/systemd/coredump
+  volumes:
+  - name: proc
+    hostPath:
+      path: /proc
+  - name: coredump-dir
+    hostPath:
+      path: /var/lib/systemd/coredump
+      type: DirectoryOrCreate
+  restartPolicy: Never

@@ -3,7 +3,6 @@ package monitor
 import (
 	"context"
 	"net/http"
-	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -52,11 +51,11 @@ type Metrics struct {
 	// Cleanup metrics
 	InstancesUninstalled prometheus.Counter
 	CleanupErrors        prometheus.Counter
-	RestartCounts        prometheus.GaugeVec
+	RestartCounts        *prometheus.GaugeVec
 	
 	// General metrics
 	AgentUp              prometheus.Gauge
-	MilvusInstancesTotal prometheus.GaugeVec
+	MilvusInstancesTotal *prometheus.GaugeVec
 	LastProcessedFile    prometheus.Gauge
 }
 

@@ -9,7 +9,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
@@ -58,6 +57,10 @@ func (d *Discovery) scanInstances(ctx context.Context) {
 	ticker := time.NewTicker(d.config.ScanInterval)
 	defer ticker.Stop()
 
+	// Scan immediately on startup
+	klog.Info("Starting initial Milvus instance scan...")
+	d.discoverInstances(ctx)
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -69,6 +72,7 @@ func (d *Discovery) scanInstances(ctx context.Context) {
 }
 
 func (d *Discovery) discoverInstances(ctx context.Context) {
+	klog.Infof("Scanning for Milvus instances in namespaces: %v", d.config.Namespaces)
 	for _, namespace := range d.config.Namespaces {
 		if err := d.discoverInNamespace(ctx, namespace); err != nil {
 			klog.Errorf("Failed to discover instances in namespace %s: %v", namespace, err)
@@ -82,6 +86,7 @@ func (d *Discovery) discoverInNamespace(ctx context.Context, namespace string) e
 		return fmt.Errorf("failed to list pods: %w", err)
 	}
 
+	klog.Infof("Found %d pods in namespace %s", len(pods.Items), namespace)
 	instanceMap := make(map[string]*MilvusInstance)
 
 	for _, pod := range pods.Items {
@@ -107,8 +112,10 @@ func (d *Discovery) discoverInNamespace(ctx context.Context, namespace string) e
 func (d *Discovery) identifyMilvusInstance(pod *corev1.Pod) *MilvusInstance {
 	deploymentType := d.getDeploymentType(pod)
 	if deploymentType == "" {
+		klog.V(4).Infof("Pod %s/%s is not a Milvus instance", pod.Namespace, pod.Name)
 		return nil
 	}
+	klog.Infof("Identified Milvus pod %s/%s as %s deployment", pod.Namespace, pod.Name, deploymentType)
 
 	instanceName := d.extractInstanceName(pod, deploymentType)
 	if instanceName == "" {
@@ -275,6 +282,7 @@ func (d *Discovery) checkForRestarts(oldPod, newPod *corev1.Pod) {
 	if d.identifyMilvusInstance(newPod) == nil {
 		return
 	}
+	klog.V(3).Infof("Checking for restarts: pod %s/%s", newPod.Namespace, newPod.Name)
 
 	for i, newStatus := range newPod.Status.ContainerStatuses {
 		if i >= len(oldPod.Status.ContainerStatuses) {
@@ -283,9 +291,13 @@ func (d *Discovery) checkForRestarts(oldPod, newPod *corev1.Pod) {
 		
 		oldStatus := oldPod.Status.ContainerStatuses[i]
 		if newStatus.RestartCount > oldStatus.RestartCount {
+			klog.Infof("Detected restart for pod %s/%s: %s (old: %d, new: %d)", 
+				newPod.Namespace, newPod.Name, newStatus.Name, 
+				oldStatus.RestartCount, newStatus.RestartCount)
 			event := d.createRestartEvent(newPod, newStatus)
 			select {
 			case d.restartChan <- event:
+				klog.Infof("Sent restart event for pod %s/%s", newPod.Namespace, newPod.Name)
 			default:
 				klog.Warning("Restart event channel is full, dropping event")
 			}

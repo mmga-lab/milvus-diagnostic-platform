@@ -1,0 +1,98 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: host-coredump-check
+spec:
+  hostNetwork: true
+  hostPID: true
+  containers:
+  - name: checker
+    image: ubuntu:20.04
+    command: ["/bin/bash", "-c"]
+    args:
+      - |
+        echo "=== Checking Host Coredump Configuration ==="
+        
+        echo "1. Core pattern:"
+        cat /proc/sys/kernel/core_pattern || echo "Cannot read core_pattern"
+        
+        echo "2. Core uses PID:"
+        cat /proc/sys/kernel/core_uses_pid || echo "Cannot read core_uses_pid"
+        
+        echo "3. Core pipe limit:"
+        cat /proc/sys/kernel/core_pipe_limit || echo "Cannot read core_pipe_limit"
+        
+        echo "4. Current ulimit -c:"
+        ulimit -c
+        
+        echo "5. Checking systemd-coredump:"
+        ps aux | grep -i systemd.*core || echo "No systemd-coredump found"
+        
+        echo "6. Checking /proc/sys/kernel/core_pattern content:"
+        CORE_PATTERN=$(cat /proc/sys/kernel/core_pattern)
+        if [[ "$CORE_PATTERN" =~ ^\| ]]; then
+            echo "Core pattern is piped to: ${CORE_PATTERN#|}"
+        else
+            echo "Core pattern writes to file: $CORE_PATTERN"
+        fi
+        
+        echo "7. Checking target directories:"
+        if [[ "$CORE_PATTERN" =~ /var/lib/systemd/coredump ]]; then
+            ls -la /var/lib/systemd/coredump/ || echo "/var/lib/systemd/coredump not accessible"
+        fi
+        if [[ "$CORE_PATTERN" =~ /var/crash ]]; then
+            ls -la /var/crash/ || echo "/var/crash not accessible"
+        fi
+        
+        echo "8. Testing simple coredump generation:"
+        # Create a test directory
+        mkdir -p /tmp/test-cores
+        
+        # Try to set a simple core pattern
+        echo "/tmp/test-cores/core.%e.%p" > /proc/sys/kernel/core_pattern 2>/dev/null || echo "Cannot modify core_pattern (expected in container)"
+        
+        echo "9. Checking if we can create cores with current settings:"
+        cd /tmp/test-cores
+        ulimit -c unlimited
+        
+        # Create simple crasher
+        cat > crasher.c << 'EOF'
+        int main() { int *p = 0; *p = 42; return 0; }
+        EOF
+        
+        # Install gcc if possible
+        apt-get update && apt-get install -y gcc 2>/dev/null || echo "Cannot install gcc"
+        
+        if command -v gcc >/dev/null; then
+            gcc -o crasher crasher.c
+            echo "Running crasher to test core generation..."
+            ./crasher || echo "Crasher exited with code: $?"
+            echo "Files in test directory:"
+            ls -la /tmp/test-cores/
+        else
+            echo "No compiler available for core test"
+        fi
+        
+        echo "=== Host Coredump Check Complete ==="
+        sleep 30
+    securityContext:
+      privileged: true
+    volumeMounts:
+    - name: proc
+      mountPath: /proc
+    - name: sys  
+      mountPath: /sys
+    - name: host-root
+      mountPath: /host
+      readOnly: true
+  volumes:
+  - name: proc
+    hostPath:
+      path: /proc
+  - name: sys
+    hostPath:
+      path: /sys
+  - name: host-root
+    hostPath:
+      path: /
+  restartPolicy: Never

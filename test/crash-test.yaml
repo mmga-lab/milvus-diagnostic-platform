@@ -1,0 +1,79 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fake-milvus-crash
+  labels:
+    app.kubernetes.io/name: milvus
+    app.kubernetes.io/instance: test-crash
+    helm.sh/chart: milvus
+spec:
+  containers:
+  - name: crash-simulator
+    image: ubuntu:22.04
+    command: ["/bin/bash", "-c"]
+    args:
+      - |
+        # Install necessary tools
+        apt-get update && apt-get install -y gdb
+        
+        # Enable core dumps
+        ulimit -c unlimited
+        echo "Core dump enabled"
+        
+        # Create a simple C program that will crash
+        cat > /tmp/crash.c << 'EOF'
+        #include <stdio.h>
+        #include <stdlib.h>
+        #include <signal.h>
+        #include <unistd.h>
+        
+        void cause_segfault() {
+            int *p = NULL;
+            *p = 42;  // This will cause SIGSEGV
+        }
+        
+        int main() {
+            printf("Fake Milvus process starting...\n");
+            printf("PID: %d\n", getpid());
+            printf("Will crash in 10 seconds...\n");
+            
+            sleep(10);
+            
+            printf("Causing segmentation fault...\n");
+            cause_segfault();
+            
+            return 0;
+        }
+        EOF
+        
+        # Compile and run
+        gcc -g -o /tmp/fake-milvus /tmp/crash.c
+        
+        # Set core pattern to write to a location we can access
+        echo "/var/crash/core.%e.%p.%t" > /proc/sys/kernel/core_pattern || true
+        
+        # Create crash directory
+        mkdir -p /var/crash
+        
+        # Run the program
+        echo "Starting fake Milvus process..."
+        /tmp/fake-milvus
+        
+        # Keep container running after crash
+        echo "Process crashed, keeping container alive for debugging..."
+        sleep 3600
+    securityContext:
+      privileged: true
+    volumeMounts:
+    - name: crash-dir
+      mountPath: /var/crash
+    - name: host-coredump
+      mountPath: /var/lib/systemd/coredump
+  volumes:
+  - name: crash-dir
+    emptyDir: {}
+  - name: host-coredump
+    hostPath:
+      path: /var/lib/systemd/coredump
+      type: DirectoryOrCreate
+  restartPolicy: Never

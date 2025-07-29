@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: quick-coredump-test
+  labels:
+    app.kubernetes.io/name: milvus
+    app.kubernetes.io/instance: quick-test
+spec:
+  containers:
+  - name: milvus-crasher
+    image: milvus-crasher:latest
+    imagePullPolicy: Never
+    securityContext:
+      privileged: true
+    volumeMounts:
+    - name: coredump-vol
+      mountPath: /var/lib/systemd/coredump
+    resources:
+      limits:
+        memory: "256Mi"
+        cpu: "100m"
+  restartPolicy: Always
+  volumes:
+  - name: coredump-vol
+    hostPath:
+      path: /var/lib/systemd/coredump
+      type: DirectoryOrCreate

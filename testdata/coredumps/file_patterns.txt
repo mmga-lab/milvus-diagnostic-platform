@@ -1,0 +1,15 @@
+# Sample coredump filenames for testing pattern matching
+
+# Standard coredump patterns
+core.milvus.1000.1234567890.15678
+core.milvus_crasher.1001.1634567890.15679
+
+# systemd coredump patterns  
+core.milvus.1000.a1b2c3d4.1234567890.15678
+core.milvus_crasher.1001.e5f6a7b8.1634567890.15679
+
+# Non-matching patterns (should be ignored)
+core.other_app.1000.1234567890.15678
+milvus.log
+regular_file.txt
+core.test.debug.1000.1234567890.15678

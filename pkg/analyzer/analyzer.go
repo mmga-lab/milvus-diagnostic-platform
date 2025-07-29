@@ -293,56 +293,84 @@ func (a *Analyzer) basicAnalysis(coredump *collector.CoredumpFile) (*collector.A
 
 func (a *Analyzer) calculateValueScore(coredump *collector.CoredumpFile, results *collector.AnalysisResults) float64 {
 	score := 4.0 // base score (updated from 5.0 to align with documentation)
+	scoreBreakdown := []string{fmt.Sprintf("基础分: %.1f", score)}
 
 	// Rule-based scoring dimensions (AI analysis does NOT affect scoring)
 	
 	// 1. Crash reason clarity (+2.0)
 	if results.CrashReason != "" {
 		score += 2.0
+		scoreBreakdown = append(scoreBreakdown, fmt.Sprintf("崩溃原因明确: +2.0 (%s)", results.CrashReason))
 		
 		// Panic keywords bonus (+1.0)
 		for _, keyword := range a.config.PanicKeywords {
 			if strings.Contains(strings.ToLower(results.CrashReason), strings.ToLower(keyword)) {
 				score += 1.0
+				scoreBreakdown = append(scoreBreakdown, fmt.Sprintf("包含关键词 '%s': +1.0", keyword))
 				break
 			}
 		}
+	} else {
+		scoreBreakdown = append(scoreBreakdown, "崩溃原因不明确: +0.0")
 	}
 
 	// 2. Stack trace quality (+1.5)
 	if results.StackTrace != "" && len(results.StackTrace) > 100 {
 		score += 1.5
+		scoreBreakdown = append(scoreBreakdown, fmt.Sprintf("堆栈跟踪质量高: +1.5 (%d字符)", len(results.StackTrace)))
+	} else {
+		scoreBreakdown = append(scoreBreakdown, fmt.Sprintf("堆栈跟踪质量低: +0.0 (%d字符)", len(results.StackTrace)))
 	}
 
 	// 3. Multi-thread complexity (+0.5)
 	if results.ThreadCount > 1 {
 		score += 0.5
+		scoreBreakdown = append(scoreBreakdown, fmt.Sprintf("多线程复杂性: +0.5 (%d线程)", results.ThreadCount))
+	} else {
+		scoreBreakdown = append(scoreBreakdown, fmt.Sprintf("单线程: +0.0 (%d线程)", results.ThreadCount))
 	}
 
 	// 4. Pod association (+1.0)
 	if coredump.PodName != "" && coredump.InstanceName != "" {
 		score += 1.0
+		scoreBreakdown = append(scoreBreakdown, fmt.Sprintf("Pod关联: +1.0 (%s/%s)", coredump.PodName, coredump.InstanceName))
+	} else {
+		scoreBreakdown = append(scoreBreakdown, "无Pod关联: +0.0")
 	}
 
 	// 5. Signal severity (+1.0)
 	if coredump.Signal == 11 || coredump.Signal == 6 || coredump.Signal == 8 {
 		score += 1.0
+		scoreBreakdown = append(scoreBreakdown, fmt.Sprintf("严重信号: +1.0 (信号%d)", coredump.Signal))
+	} else {
+		scoreBreakdown = append(scoreBreakdown, fmt.Sprintf("普通信号: +0.0 (信号%d)", coredump.Signal))
 	}
 
 	// 6. File size (+0.5) - larger files contain more information
 	if coredump.Size > 100*1024*1024 {
 		score += 0.5
+		scoreBreakdown = append(scoreBreakdown, fmt.Sprintf("大文件: +0.5 (%.1fMB)", float64(coredump.Size)/1024/1024))
+	} else {
+		scoreBreakdown = append(scoreBreakdown, fmt.Sprintf("小文件: +0.0 (%.1fMB)", float64(coredump.Size)/1024/1024))
 	}
 
 	// 7. Freshness (+0.5) - recent crashes are more valuable
 	if time.Since(coredump.ModTime) < time.Hour {
 		score += 0.5
+		scoreBreakdown = append(scoreBreakdown, fmt.Sprintf("新鲜度高: +0.5 (%s前)", time.Since(coredump.ModTime).Round(time.Minute)))
+	} else {
+		scoreBreakdown = append(scoreBreakdown, fmt.Sprintf("文件较旧: +0.0 (%s前)", time.Since(coredump.ModTime).Round(time.Minute)))
 	}
 
 	// Cap the score at 10.0
 	if score > 10.0 {
 		score = 10.0
+		scoreBreakdown = append(scoreBreakdown, "分数上限: 10.0")
 	}
+
+	// Log detailed scoring breakdown
+	klog.Infof("分数计算详情 [%s]: %s -> 总分: %.2f", 
+		coredump.Path, strings.Join(scoreBreakdown, ", "), score)
 
 	return score
 }

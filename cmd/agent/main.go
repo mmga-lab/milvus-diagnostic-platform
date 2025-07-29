@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
-	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -83,7 +82,7 @@ func (a *Agent) Run(ctx context.Context) error {
 	
 	analyzerManager := analyzer.New(&a.config.Analyzer)
 	
-	storageManager, err := storage.New(&a.config.Storage)
+	storageManager, err := storage.New(&a.config.Storage, &a.config.Analyzer)
 	if err != nil {
 		return fmt.Errorf("failed to create storage manager: %w", err)
 	}

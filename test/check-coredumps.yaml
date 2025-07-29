@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: check-coredumps
+spec:
+  hostNetwork: true
+  containers:
+  - name: checker
+    image: ubuntu:20.04
+    command: ["/bin/bash", "-c"]
+    args:
+      - |
+        echo "Checking coredump files..."
+        echo "Core pattern: $(cat /proc/sys/kernel/core_pattern)"
+        
+        echo "Checking /var/lib/systemd/coredump:"
+        ls -la /var/lib/systemd/coredump/ || echo "Directory not accessible or empty"
+        
+        echo "Checking /tmp/cores (backup location):"
+        ls -la /tmp/cores/ || echo "Directory not accessible or empty"
+        
+        echo "Searching for any core files:"
+        find /var/lib/systemd/coredump /tmp/cores -name "core*" 2>/dev/null | head -10 || echo "No core files found"
+        
+        sleep 30
+    securityContext:
+      privileged: true
+    volumeMounts:
+    - name: coredump-dir
+      mountPath: /var/lib/systemd/coredump
+    - name: tmp-cores
+      mountPath: /tmp/cores
+  volumes:
+  - name: coredump-dir
+    hostPath:
+      path: /var/lib/systemd/coredump
+      type: DirectoryOrCreate
+  - name: tmp-cores
+    hostPath:
+      path: /tmp/cores
+      type: DirectoryOrCreate
+  restartPolicy: Never

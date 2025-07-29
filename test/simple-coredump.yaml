@@ -1,0 +1,75 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: simple-coredump
+  labels:
+    app.kubernetes.io/name: milvus
+    app.kubernetes.io/instance: simple-test
+spec:
+  containers:
+  - name: crash
+    image: alpine:latest
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        # Install build tools
+        apk add --no-cache gcc musl-dev
+        
+        # Enable core dumps
+        ulimit -c unlimited
+        echo "Core dump limit: $(ulimit -c)"
+        echo "Core pattern: $(cat /proc/sys/kernel/core_pattern)"
+        
+        # Create core dump directory
+        mkdir -p /var/lib/systemd/coredump
+        
+        # Create and compile a simple crashing program
+        cat > /tmp/crash.c << 'EOF'
+        #include <stdio.h>
+        #include <unistd.h>
+        
+        int main() {
+            printf("Simple crasher starting (PID: %d)\n", getpid());
+            printf("Will crash in 3 seconds...\n");
+            fflush(stdout);
+            
+            sleep(3);
+            
+            printf("Crashing now!\n");
+            fflush(stdout);
+            
+            // Cause segmentation fault
+            int *p = (int*)0;
+            *p = 42;
+            
+            return 0;
+        }
+        EOF
+        
+        # Compile with debug info
+        gcc -g -o /tmp/crasher /tmp/crash.c
+        
+        # Change to the coredump directory
+        cd /var/lib/systemd/coredump
+        
+        # Try to set a direct core pattern (may not work without privileges)
+        echo "core.%e.%p" > /proc/sys/kernel/core_pattern 2>/dev/null || true
+        echo "Final core pattern: $(cat /proc/sys/kernel/core_pattern)"
+        
+        # Run the crasher
+        /tmp/crasher
+        
+        # Should not reach here
+        echo "This should not print"
+        sleep 60
+    securityContext:
+      privileged: true
+    volumeMounts:
+    - name: coredump-vol
+      mountPath: /var/lib/systemd/coredump
+  restartPolicy: Always
+  volumes:
+  - name: coredump-vol
+    hostPath:
+      path: /var/lib/systemd/coredump
+      type: DirectoryOrCreate

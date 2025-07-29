@@ -1,0 +1,87 @@
+FROM ubuntu:20.04
+
+# Install build dependencies and GDB
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    gcc \
+    gdb \
+    libc6-dbg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create the crasher program
+RUN cat > /tmp/milvus_crasher.c << 'EOF' && \
+    gcc -g -O0 -o /usr/local/bin/milvus_crasher /tmp/milvus_crasher.c && \
+    rm /tmp/milvus_crasher.c
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <signal.h>
+#include <sys/resource.h>
+
+void print_info() {
+    printf("=== Milvus Crasher ===\n");
+    printf("PID: %d\n", getpid());
+    printf("PPID: %d\n", getppid());
+    
+    struct rlimit rlim;
+    if (getrlimit(RLIMIT_CORE, &rlim) == 0) {
+        printf("Core dump limit: ");
+        if (rlim.rlim_cur == RLIM_INFINITY) {
+            printf("unlimited\n");
+        } else {
+            printf("%lu bytes\n", rlim.rlim_cur);
+        }
+    }
+}
+
+// Simulate some milvus-like operations
+void simulate_milvus_work() {
+    printf("Simulating Milvus database operations...\n");
+    
+    // Allocate some memory
+    char *data = malloc(1024 * 1024);  // 1MB
+    if (data) {
+        memset(data, 0x42, 1024 * 1024);
+        printf("Allocated and initialized 1MB memory\n");
+    }
+    
+    // Simulate some work
+    for (int i = 0; i < 100; i++) {
+        usleep(10000);  // 10ms
+        if (i % 20 == 0) {
+            printf("Processing batch %d...\n", i);
+        }
+    }
+    
+    free(data);
+}
+
+int main() {
+    print_info();
+    
+    printf("Starting Milvus-like process...\n");
+    simulate_milvus_work();
+    
+    printf("Will crash with SIGSEGV in 3 seconds...\n");
+    fflush(stdout);
+    sleep(3);
+    
+    printf("Triggering segmentation fault...\n");
+    fflush(stdout);
+    
+    // Make sure SIGSEGV is not caught
+    signal(SIGSEGV, SIG_DFL);
+    
+    // Create segmentation fault
+    volatile int *null_ptr = NULL;
+    *null_ptr = 0xDEADBEEF;
+    
+    // Should not reach here
+    printf("ERROR: Crash did not occur!\n");
+    return 1;
+}
+EOF
+
+# Set the default command
+CMD ["/bin/bash", "-c", "ulimit -c unlimited && mkdir -p /var/lib/systemd/coredump && cd /var/lib/systemd/coredump && /usr/local/bin/milvus_crasher"]

@@ -20,9 +20,10 @@ import (
 )
 
 type Storage struct {
-	config    *config.StorageConfig
-	backend   Backend
-	eventChan chan StorageEvent
+	config         *config.StorageConfig
+	analyzerConfig *config.AnalyzerConfig
+	backend        Backend
+	eventChan      chan StorageEvent
 }
 
 type Backend interface {
@@ -56,7 +57,7 @@ type StoredFile struct {
 	InstanceName string    `json:"instanceName"`
 }
 
-func New(config *config.StorageConfig) (*Storage, error) {
+func New(config *config.StorageConfig, analyzerConfig *config.AnalyzerConfig) (*Storage, error) {
 	var backend Backend
 	var err error
 
@@ -76,7 +77,8 @@ func New(config *config.StorageConfig) (*Storage, error) {
 	}
 
 	return &Storage{
-		config:    config,
+		config:         config,
+		analyzerConfig: analyzerConfig,
 		backend:   backend,
 		eventChan: make(chan StorageEvent, 100),
 	}, nil
@@ -117,7 +119,7 @@ func (s *Storage) processAnalysisEvents(ctx context.Context, analyzerChan <-chan
 }
 
 func (s *Storage) handleAnalyzedFile(ctx context.Context, coredump *collector.CoredumpFile) {
-	if coredump.ValueScore < s.config.ValueThreshold {
+	if coredump.ValueScore < s.analyzerConfig.ValueThreshold {
 		klog.Infof("Skipping storage for low-value coredump: %s (score: %.2f)", 
 			coredump.Path, coredump.ValueScore)
 		return

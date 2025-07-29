@@ -1,0 +1,47 @@
+discovery:
+  helmReleaseLabels:
+    "app.kubernetes.io/name": "milvus"
+    "helm.sh/chart": "milvus"
+  operatorLabels:
+    "app.kubernetes.io/managed-by": "milvus-operator"
+    "milvus.io/instance": ""
+  scanInterval: "30s"
+
+collector:
+  coredumpPath: "/tmp/test-coredumps"
+  scanInterval: "10s"
+  maxFileSize: "2GB"
+
+analyzer:
+  enableGdbAnalysis: true
+  gdbTimeout: "30s"
+  valueThreshold: 4.0
+  panicKeywords:
+    - "panic"
+    - "fatal"
+    - "sigsegv"
+    - "sigabrt"
+    - "assert"
+  ignorePatterns:
+    - "test"
+    - "debug"
+  aiAnalysis:
+    enabled: false
+    provider: "mock"
+    model: "test"
+    apiKey: "test-key"
+
+storage:
+  backend: "local"
+  localPath: "/tmp/test-storage"
+  retentionDays: 7
+
+cleaner:
+  enabled: false
+  maxRestartCount: 5
+  cleanupDelay: "1h"
+
+monitor:
+  enabled: false
+  port: 8080
+  healthPort: 8081

@@ -1,0 +1,95 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: coredump-test
+  labels:
+    app.kubernetes.io/name: milvus
+    app.kubernetes.io/instance: coredump-test
+spec:
+  containers:
+  - name: crasher
+    image: ubuntu:22.04
+    command: ["/bin/bash", "-c"]
+    args:
+      - |
+        # Install necessary tools
+        apt-get update && apt-get install -y gcc gdb
+        
+        # Enable core dumps
+        ulimit -c unlimited
+        echo "Core dump limit: $(ulimit -c)"
+        
+        # Check current core pattern
+        echo "Core pattern: $(cat /proc/sys/kernel/core_pattern)"
+        
+        # Create directories
+        mkdir -p /var/crash /var/lib/systemd/coredump
+        
+        # Try to set core pattern (may fail without privileges)
+        echo "/var/lib/systemd/coredump/core.%e.%p.%t" > /proc/sys/kernel/core_pattern 2>/dev/null || true
+        echo "Updated core pattern: $(cat /proc/sys/kernel/core_pattern)"
+        
+        # Create a program that will crash
+        cat > /tmp/crash.c << 'EOF'
+        #include <stdio.h>
+        #include <stdlib.h>
+        #include <unistd.h>
+        #include <signal.h>
+        
+        void segfault_handler(int sig) {
+            printf("Caught signal %d\n", sig);
+            exit(1);
+        }
+        
+        int main() {
+            printf("PID: %d\n", getpid());
+            printf("Generating core dump in 5 seconds...\n");
+            
+            // Don't catch SIGSEGV so core dump is generated
+            // signal(SIGSEGV, segfault_handler);
+            
+            sleep(5);
+            
+            printf("Causing segmentation fault...\n");
+            fflush(stdout);
+            
+            // Cause segmentation fault
+            int *p = NULL;
+            *p = 42;
+            
+            return 0;
+        }
+        EOF
+        
+        # Compile with debug symbols
+        gcc -g -o /tmp/crasher /tmp/crash.c
+        
+        # Run the crasher
+        echo "Starting crasher program..."
+        cd /var/lib/systemd/coredump
+        /tmp/crasher
+        
+        # This shouldn't execute
+        echo "Program exited (this shouldn't print)"
+    securityContext:
+      # Need privileged to modify core pattern
+      privileged: true
+    volumeMounts:
+    - name: coredump-dir
+      mountPath: /var/lib/systemd/coredump
+    - name: crash-dir  
+      mountPath: /var/crash
+    resources:
+      limits:
+        memory: "256Mi"
+        cpu: "100m"
+  restartPolicy: Always
+  volumes:
+  - name: coredump-dir
+    hostPath:
+      path: /var/lib/systemd/coredump
+      type: DirectoryOrCreate
+  - name: crash-dir
+    hostPath:
+      path: /var/crash
+      type: DirectoryOrCreate

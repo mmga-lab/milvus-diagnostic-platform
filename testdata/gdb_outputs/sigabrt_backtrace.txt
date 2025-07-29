@@ -1,0 +1,46 @@
+=====BACKTRACE=====
+#0  0x00007ffff7a55e87 in raise () from /lib/x86_64-linux-gnu/libc.so.6
+#1  0x00007ffff7a57498 in abort () from /lib/x86_64-linux-gnu/libc.so.6
+#2  0x00007ffff7a4f3f6 in __assert_fail_base () from /lib/x86_64-linux-gnu/libc.so.6
+#3  0x00007ffff7a4f472 in __assert_fail () from /lib/x86_64-linux-gnu/libc.so.6
+#4  0x0000000000401189 in assert_test () at crasher.c:35
+#5  0x00000000004011a7 in main () at crasher.c:40
+Program received signal SIGABRT, Aborted.
+0x00007ffff7a55e87 in raise () from /lib/x86_64-linux-gnu/libc.so.6
+
+=====REGISTERS=====
+rax            0xffffffffffffffda	-38
+rbx            0x0	0
+rcx            0x7ffff7a55e87	140737348177543
+rdx            0x6	6
+rsi            0x39c5	14789
+rdi            0x39c5	14789
+rbp            0x7fffffffe370	0x7fffffffe370
+rsp            0x7fffffffe308	0x7fffffffe308
+r8             0x0	0
+r9             0x7fffffffe308	140737488348936
+r10            0x8	8
+r11            0x206	518
+r12            0x401050	4198480
+r13            0x7fffffffe450	140737488348240
+r14            0x0	0
+r15            0x0	0
+rip            0x7ffff7a55e87	0x7ffff7a55e87 <raise+199>
+eflags         0x206	[ PF IF ]
+
+=====THREADS=====
+  Id   Target Id         Frame 
+* 1    Thread 0x7ffff7dd4740 (LWP 14789) "milvus_crasher" 0x00007ffff7a55e87 in raise ()
+
+=====MEMORY=====
+    Start Addr           End Addr       Size     Offset objfile
+  0x400000           0x401000     0x1000        0x0 /opt/milvus_crasher
+  0x600000           0x601000     0x1000     0x1000 /opt/milvus_crasher
+0x7ffff7a0d000     0x7ffff7bd0000   0x1c3000        0x0 /lib/x86_64-linux-gnu/libc-2.31.so
+
+=====SHARED_LIBS=====
+From                To                  Syms Read   Shared Object Library
+0x00007ffff7fd0090  0x00007ffff7ff2970  Yes (*)     /lib64/ld-linux-x86-64.so.2
+0x00007ffff7a55a20  0x00007ffff7b9c869  Yes (*)     /lib/x86_64-linux-gnu/libc.so.6
+
+=====END=====

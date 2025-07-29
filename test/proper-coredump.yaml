@@ -1,0 +1,129 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: proper-coredump-test
+  labels:
+    app.kubernetes.io/name: milvus
+    app.kubernetes.io/instance: coredump-gen
+spec:
+  containers:
+  - name: crasher
+    image: ubuntu:20.04
+    command: ["/bin/bash", "-c"]
+    args:
+      - |
+        set -e
+        
+        echo "=== Setting up coredump environment ==="
+        
+        # Install necessary tools
+        apt-get update && apt-get install -y gcc gdb
+        
+        # Create coredump directories
+        mkdir -p /var/lib/systemd/coredump /var/crash /tmp/cores
+        
+        # Set core dump file size to unlimited
+        ulimit -c unlimited
+        echo "Core dump file size limit: $(ulimit -c)"
+        
+        # Check current core pattern
+        echo "Original core pattern: $(cat /proc/sys/kernel/core_pattern)"
+        
+        # Try to set core pattern to agent's expected location
+        # First try: direct to agent directory
+        if echo "/var/lib/systemd/coredump/core.%e.%p.%t" > /proc/sys/kernel/core_pattern 2>/dev/null; then
+            echo "Successfully set core pattern to agent directory"
+        elif echo "/tmp/cores/core.%e.%p.%t" > /proc/sys/kernel/core_pattern 2>/dev/null; then
+            echo "Set core pattern to /tmp/cores/"
+            # Create symlink for agent
+            ln -sf /tmp/cores/* /var/lib/systemd/coredump/ 2>/dev/null || true
+        else
+            echo "Cannot modify core pattern, using current: $(cat /proc/sys/kernel/core_pattern)"
+            # Create the target directory
+            mkdir -p /var/crash
+        fi
+        
+        echo "Final core pattern: $(cat /proc/sys/kernel/core_pattern)"
+        
+        # Create a crasher program
+        cat > /tmp/crasher.c << 'EOF'
+        #include <stdio.h>
+        #include <stdlib.h>
+        #include <unistd.h>
+        #include <signal.h>
+        #include <sys/resource.h>
+        
+        int main() {
+            struct rlimit rlim;
+            
+            printf("=== Crasher Program ===\n");
+            printf("PID: %d\n", getpid());
+            
+            // Check core dump limit
+            if (getrlimit(RLIMIT_CORE, &rlim) == 0) {
+                printf("Core dump limit: ");
+                if (rlim.rlim_cur == RLIM_INFINITY) {
+                    printf("unlimited\n");
+                } else {
+                    printf("%lu bytes\n", rlim.rlim_cur);
+                }
+            }
+            
+            printf("Current working directory: %s\n", getcwd(NULL, 0));
+            printf("Will crash in 5 seconds...\n");
+            fflush(stdout);
+            
+            sleep(5);
+            
+            printf("Generating segmentation fault to create core dump...\n");
+            fflush(stdout);
+            
+            // Ensure we don't catch the signal
+            signal(SIGSEGV, SIG_DFL);
+            
+            // Generate segmentation fault
+            volatile int *p = NULL;
+            *p = 42;  // This will crash
+            
+            // Should never reach here
+            printf("ERROR: Program did not crash as expected!\n");
+            return 1;
+        }
+        EOF
+        
+        # Compile with debug symbols
+        gcc -g -O0 -o /tmp/crasher /tmp/crasher.c
+        echo "Compiled crasher program"
+        
+        # Change to a directory where we have write permissions
+        cd /tmp
+        
+        echo "=== Starting crasher program ==="
+        /tmp/crasher
+        
+        # Should not reach here
+        echo "ERROR: crasher returned normally"
+        sleep 10
+    securityContext:
+      privileged: true
+      capabilities:
+        add: ["SYS_ADMIN"]
+    volumeMounts:
+    - name: coredump-storage
+      mountPath: /var/lib/systemd/coredump
+    - name: crash-storage
+      mountPath: /var/crash
+    resources:
+      limits:
+        memory: "512Mi"
+        cpu: "200m"
+  restartPolicy: Always
+  volumes:
+  - name: coredump-storage
+    hostPath:
+      path: /var/lib/systemd/coredump
+      type: DirectoryOrCreate
+  - name: crash-storage
+    hostPath:
+      path: /var/crash
+      type: DirectoryOrCreate  

@@ -1,0 +1,34 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: simple-milvus-crash
+  labels:
+    app.kubernetes.io/name: milvus
+    app.kubernetes.io/instance: test-simple
+    helm.sh/chart: milvus
+spec:
+  containers:
+  - name: crash
+    image: busybox:latest
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        echo "Fake Milvus starting..."
+        echo "PID: $$"
+        echo "Enabling core dumps..."
+        ulimit -c unlimited
+        
+        # Create crash directory
+        mkdir -p /tmp/crash
+        
+        # Wait a bit
+        echo "Will crash in 5 seconds..."
+        sleep 5
+        
+        # Generate a segmentation fault
+        echo "Crashing now..."
+        sh -c 'kill -SEGV $$'
+        
+        # This won't execute
+        echo "This should not print"
+  restartPolicy: Always

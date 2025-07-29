@@ -1,0 +1,52 @@
+=====BACKTRACE=====
+#0  0x0000000000401234 in crash_function () at crasher.c:15
+#1  0x0000000000401267 in main () at crasher.c:25
+Program received signal SIGSEGV, Segmentation fault.
+0x0000000000401234 in crash_function () at crasher.c:15
+15	    *null_ptr = 42;  // This will cause SIGSEGV
+
+=====REGISTERS=====
+rax            0x0	0
+rbx            0x0	0  
+rcx            0x7ffff7dd4718	140737351902488
+rdx            0x7ffff7dd4718	140737351902488
+rsi            0x7ffff7dd3760	140737351898976
+rdi            0x1	1
+rbp            0x7fffffffe380	0x7fffffffe380
+rsp            0x7fffffffe360	0x7fffffffe360
+r8             0x7ffff7dd3760	140737351898976
+r9             0x7ffff7dd3760	140737351898976
+r10            0x7ffff7dd1b80	140737351891840
+r11            0x7ffff7dd1b80	140737351891840
+r12            0x401050	4198480
+r13            0x7fffffffe460	140737488348256
+r14            0x0	0
+r15            0x0	0
+rip            0x401234	0x401234 <crash_function+20>
+eflags         0x10206	[ PF IF RF ]
+cs             0x33	51
+ss             0x2b	43
+ds             0x0	0
+es             0x0	0
+fs             0x0	0
+gs             0x0	0
+
+=====THREADS=====
+  Id   Target Id         Frame 
+* 1    Thread 0x7ffff7dd4740 (LWP 12345) "milvus_crasher" 0x0000000000401234 in crash_function ()
+
+=====MEMORY=====
+    Start Addr           End Addr       Size     Offset objfile
+  0x400000           0x401000     0x1000        0x0 /opt/milvus_crasher
+  0x600000           0x601000     0x1000     0x1000 /opt/milvus_crasher
+  0x601000           0x602000     0x1000     0x2000 /opt/milvus_crasher
+0x7ffff7a0d000     0x7ffff7bd0000   0x1c3000        0x0 /lib/x86_64-linux-gnu/libc-2.31.so
+0x7ffff7bd0000     0x7ffff7c1a000    0x4a000   0x1c3000 /lib/x86_64-linux-gnu/libc-2.31.so
+0x7ffff7c1a000     0x7ffff7c44000    0x2a000   0x20d000 /lib/x86_64-linux-gnu/libc-2.31.so
+
+=====SHARED_LIBS=====
+From                To                  Syms Read   Shared Object Library
+0x00007ffff7fd0090  0x00007ffff7ff2970  Yes (*)     /lib64/ld-linux-x86-64.so.2
+0x00007ffff7a55a20  0x00007ffff7b9c869  Yes (*)     /lib/x86_64-linux-gnu/libc.so.6
+
+=====END=====

@@ -127,16 +127,28 @@ The analyzer calculates coredump value scores (0-10) using a **rule-based system
 GDB Analysis → Rule-based Scoring → Threshold Check → Storage Decision → Optional AI Analysis
 ```
 
-Files below the `valueThreshold` (default 7.0) are automatically skipped for storage.
+Files below the `valueThreshold` (configurable, default 4.0 for testing) are automatically skipped for storage.
+
+### Detailed Scoring Logs
+The system provides detailed Chinese language scoring breakdowns:
+```log
+分数计算详情 [/host/var/lib/systemd/coredump/core.milvus_crasher.1.xxx]: 
+基础分: 4.0, 崩溃原因: +2.0, Panic关键词: +1.0, 栈跟踪质量: +1.5, Pod关联: +1.0 -> 总分: 9.50
+```
 
 ## AI-Powered Analysis
 
-The system integrates OpenAI GPT-4 for intelligent coredump analysis:
+The system integrates AI models for intelligent coredump analysis using RESTful API approach:
+
+### Supported AI Providers
+- **GLM (ChatGLM)**: Primary provider using `glm-4.5-flash` model via RESTful API
+- **OpenAI**: GPT-4, GPT-3.5-turbo (removed SDK dependency for better compatibility)
+- **Extensible**: Can add other providers through RESTful API interface
 
 ### AI Analysis Pipeline
 1. **GDB Analysis First**: Traditional GDB analysis extracts technical details
 2. **AI Context Building**: Creates structured prompt with stack trace, crash info, and context
-3. **GPT-4 Analysis**: Sends context to OpenAI API for intelligent analysis
+3. **AI Model Analysis**: Sends context to AI API (GLM/OpenAI) for intelligent analysis
 4. **Structured Results**: Parses JSON response into structured debugging insights
 
 ### AI Analysis Results Structure
@@ -152,18 +164,64 @@ type AIAnalysisResult struct {
 }
 ```
 
+### AI Analysis Request Format
+The system sends structured prompts to AI models:
+```
+COREDUMP ANALYSIS REQUEST
+========================
+
+Application: milvus_crasher
+Signal: 11 (SIGSEGV)
+PID: 12345
+Kubernetes Pod: default/milvus-test
+Milvus Instance: test-instance
+Thread Count: 4
+
+STACK TRACE:
+```
+(GDB stack trace with up to 3000 characters)
+```
+
+KEY REGISTERS:
+rip = 0x12345678
+rsp = 0x87654321
+...
+
+LOADED LIBRARIES:
+- /lib/libc.so.6
+- /usr/local/lib/libmilvus.so
+...
+
+Please analyze this coredump and provide structured debugging insights in JSON format.
+```
+
 ### Cost Control Features
 - Monthly spending limits (`maxCostPerMonth`)
 - Hourly analysis limits (`maxAnalysisPerHour`)
 - Smart token management with truncation
 - Optional analysis for low-value coredumps
 
-### Configuration
-AI analysis is configured via `config.AIAnalysisConfig`:
-- Provider support: OpenAI, Azure OpenAI, Anthropic (extensible)
-- Model selection: GPT-4, GPT-3.5-turbo
-- API key management via environment variables or config
-- Cost control parameters
+### GLM Configuration Example
+```yaml
+aiAnalysis:
+  enabled: true
+  provider: "glm"
+  model: "glm-4.5-flash"
+  apiKey: "your-glm-api-key"
+  baseURL: "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+  timeout: "30s"
+  maxTokens: 2000
+  temperature: 0.3
+  enableCostControl: true
+  maxCostPerMonth: 100.0
+  maxAnalysisPerHour: 50
+```
+
+### AI Analysis Implementation
+- **RESTful API**: Uses direct HTTP client instead of vendor SDKs for better compatibility
+- **Fixed Parameters**: Uses consistent temperature (0.3) and maxTokens (2000) for stable results
+- **Error Handling**: Comprehensive logging and graceful degradation on API failures
+- **Response Parsing**: Extracts JSON from AI responses and validates structure
 
 ## Automatic Cleanup Logic
 
@@ -181,3 +239,139 @@ Storage system supports multiple backends via interface:
 - **NFS**: Network filesystem storage (placeholder implementation)
 
 Files are stored with naming: `{timestamp}_{podName}_{containerName}.core.gz`
+
+## Testing and Debugging
+
+### Coredump Generation for Testing
+
+To test the agent functionality, you can create coredump files using a crash test program:
+
+```yaml
+# test-crash-pod.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: milvus-test-crash
+  labels:
+    app.kubernetes.io/name: milvus
+    helm.sh/chart: milvus
+spec:
+  containers:
+  - name: milvus
+    image: alpine:3.18
+    command: ["/bin/sh"]
+    args: ["-c", "ulimit -c unlimited && /crasher && sleep 30"]
+    volumeMounts:
+    - name: coredump-test-volume
+      mountPath: /crasher
+      subPath: milvus_crasher
+    securityContext:
+      allowPrivilegeEscalation: true
+      capabilities:
+        add: [SYS_PTRACE]
+      runAsUser: 0
+  volumes:
+  - name: coredump-test-volume
+    configMap:
+      name: crash-test-program
+      defaultMode: 0755
+  restartPolicy: Always
+```
+
+### Prerequisites for Coredump Generation
+
+1. **Host coredump configuration**:
+   ```bash
+   # Check core pattern
+   cat /proc/sys/kernel/core_pattern
+   
+   # Should be: |/usr/lib/systemd/systemd-coredump %P %u %g %s %t %c %h
+   
+   # Check ulimit
+   ulimit -c
+   # Should be: unlimited
+   ```
+
+2. **systemd-coredump service**:
+   ```bash
+   systemctl status systemd-coredump.socket
+   systemctl status systemd-coredump@*
+   ```
+
+### Common Issues and Solutions
+
+#### 1. ConfigMap Path Mismatch
+**Problem**: Agent can't find coredump files despite them existing on host
+**Solution**: Ensure collector path matches DaemonSet mount:
+```yaml
+# In config.yaml
+collector:
+  coredumpPath: "/host/var/lib/systemd/coredump"  # Not /var/lib/systemd/coredump
+```
+
+#### 2. GLM API Parameter Errors
+**Problem**: "API 调用参数有误，请检查文档" error from GLM API
+**Solution**: Use fixed parameter values in AI analyzer:
+```go
+request := GLMChatRequest{
+    Model: "glm-4.5-flash",
+    Messages: messages,
+    Temperature: 0.3,      // Fixed value
+    MaxTokens:   2000,     // Fixed value
+}
+```
+
+#### 3. No AI Analysis Triggered
+**Problem**: AI analysis doesn't run despite coredump detection
+**Possible Causes**:
+- Value score below threshold (check `valueThreshold` in config)
+- Cost control limits reached (`maxAnalysisPerHour`, `maxCostPerMonth`)
+- API key not configured or invalid
+
+### Monitoring Commands
+
+```bash
+# Monitor agent logs for scoring details
+kubectl logs -l app=milvus-coredump-agent -f | grep "分数计算详情"
+
+# Check AI analysis results
+kubectl logs -l app=milvus-coredump-agent -f | grep "AI analysis completed"
+
+# View GLM API interactions (debug logs)
+kubectl logs -l app=milvus-coredump-agent -f | grep "GLM API"
+
+# Check coredump file detection
+kubectl logs -l app=milvus-coredump-agent -f | grep "Found coredump file"
+```
+
+### Verification Workflow
+
+1. **Deploy test pod** → Generates coredump on crash
+2. **Check discovery** → Agent detects Milvus instance and restart event
+3. **Verify collection** → Agent finds coredump file in systemd directory
+4. **Confirm GDB analysis** → Stack trace and crash info extracted
+5. **Check value scoring** → Detailed scoring breakdown in Chinese
+6. **Validate AI analysis** → GLM API integration and structured response
+7. **Verify storage** → Coredump file stored according to retention policy
+
+## Recent Improvements
+
+### GLM AI Integration (Latest)
+- **RESTful API Implementation**: Replaced OpenAI SDK with direct HTTP client for better compatibility
+- **GLM-4.5-Flash Support**: Integrated ChatGLM as primary AI provider
+- **Parameter Debugging**: Fixed GLM API parameter format issues with consistent temperature/maxTokens values
+- **Comprehensive Logging**: Added detailed request/response logging for AI API interactions
+
+### Enhanced Value Scoring System
+- **Configurable Threshold**: Made `valueThreshold` configurable (lowered to 4.0 for testing)
+- **Chinese Language Logs**: Added detailed scoring breakdowns in Chinese for better debugging
+- **Multi-dimensional Scoring**: Expanded scoring algorithm with 8 different dimensions
+
+### Path Configuration Fixes
+- **Collector Path Correction**: Fixed coredump path from `/var/lib/systemd/coredump` to `/host/var/lib/systemd/coredump`
+- **ConfigMap Mount Alignment**: Ensured DaemonSet volume mounts match collector configuration
+
+### Testing Infrastructure
+- **Pre-built Crash Program**: Created `Dockerfile.crasher` with compiled crash test binary
+- **Automated Testing**: Developed systematic testing approach for complete workflow verification
+- **Real Coredump Generation**: Moved from simulated to actual binary coredump files for GDB compatibility

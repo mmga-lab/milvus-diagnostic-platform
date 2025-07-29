@@ -31,7 +31,7 @@ spec:
       containers:
       - name: agent
         image: milvus-coredump-agent:latest
-        imagePullPolicy: Always
+        imagePullPolicy: Never
         command:
         - /bin/milvus-coredump-agent
         - --config=/etc/agent/config.yaml
@@ -108,9 +108,6 @@ spec:
         - name: docker-sock
           mountPath: /var/run/docker.sock
           readOnly: true
-        - name: containerd-sock
-          mountPath: /run/containerd/containerd.sock
-          readOnly: true
       volumes:
       - name: config
         configMap:
@@ -134,10 +131,6 @@ spec:
       - name: docker-sock
         hostPath:
           path: /var/run/docker.sock
-          type: Socket
-      - name: containerd-sock
-        hostPath:
-          path: /run/containerd/containerd.sock
           type: Socket
       dnsPolicy: ClusterFirstWithHostNet
       restartPolicy: Always

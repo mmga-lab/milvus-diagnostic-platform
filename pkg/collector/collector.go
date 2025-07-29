@@ -2,7 +2,6 @@ package collector
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"

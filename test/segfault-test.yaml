@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-milvus-crasher
+  labels:
+    app.kubernetes.io/name: milvus
+    app.kubernetes.io/instance: crasher
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: milvus-crasher
+  template:
+    metadata:
+      labels:
+        app: milvus-crasher
+        app.kubernetes.io/name: milvus
+        app.kubernetes.io/instance: crasher
+        helm.sh/chart: milvus
+    spec:
+      containers:
+      - name: crasher
+        image: alpine:latest
+        command: ["/bin/sh"]
+        args:
+          - -c
+          - |
+            echo "Installing necessary tools..."
+            apk add --no-cache gcc musl-dev
+            
+            # Create a simple program that crashes
+            cat > /tmp/crash.c << 'EOF'
+            #include <stdio.h>
+            #include <unistd.h>
+            #include <signal.h>
+            
+            int main() {
+                printf("Fake Milvus process started (PID: %d)\n", getpid());
+                printf("Running for 30 seconds before crash...\n");
+                fflush(stdout);
+                
+                sleep(30);
+                
+                printf("Triggering segmentation fault...\n");
+                fflush(stdout);
+                
+                // Cause segmentation fault
+                int *p = (int*)0;
+                *p = 42;
+                
+                return 0;
+            }
+            EOF
+            
+            # Compile the program
+            gcc -o /tmp/milvus-fake /tmp/crash.c
+            
+            # Enable core dumps
+            ulimit -c unlimited
+            
+            # Run and let it crash
+            echo "Starting fake Milvus process..."
+            /tmp/milvus-fake
+            
+            # This shouldn't execute
+            echo "Process exited unexpectedly"
+            sleep 10
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+          requests:
+            memory: "64Mi"
+            cpu: "50m"

@@ -12,13 +12,12 @@ discovery:
   namespaces: ["default", "milvus-system"]
   helmReleaseLabels:
     - "app.kubernetes.io/name=milvus"
-    - "helm.sh/chart=milvus"
   operatorLabels:
     - "app.kubernetes.io/managed-by=milvus-operator"
 
 collector:
   # Coredump collection settings
-  coredumpPath: "/var/lib/systemd/coredump"
+  coredumpPath: "/host/var/lib/systemd/coredump"
   hostCoredumpPath: "/host/var/lib/systemd/coredump"
   watchInterval: "10s"
   maxFileAge: "24h"
@@ -28,7 +27,7 @@ analyzer:
   # Analysis and filtering settings
   enableGdbAnalysis: true
   gdbTimeout: "5m"
-  valueThreshold: 7.0  # 0-10 scale, minimum value to keep
+  valueThreshold: 4.0  # 0-10 scale, minimum value to keep (lowered for testing)
   ignorePatterns:
     - "livenessProbe"
     - "readinessProbe" 
@@ -44,10 +43,10 @@ analyzer:
   # AI Analysis settings
   aiAnalysis:
     enabled: true
-    provider: "openai"  # openai, azure, anthropic
-    model: "gpt-4"
-    apiKey: ""  # Set via environment variable OPENAI_API_KEY
-    baseURL: ""  # Optional: custom API endpoint
+    provider: "glm"  # glm as default provider
+    model: "glm-4.5-flash"
+    apiKey: "88003458fb379676e0f0c93806abe68b.8OJIlG8IhsYatnJC"  # GLM API key
+    baseURL: "https://open.bigmodel.cn/api/paas/v4/chat/completions"  # GLM API endpoint
     timeout: "30s"
     maxTokens: 2000
     temperature: 0.3
