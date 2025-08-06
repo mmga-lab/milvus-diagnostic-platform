@@ -1,0 +1,67 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: milvus-coredump-controller-config
+  namespace: default
+data:
+  config.yaml: |
+    agent:
+      name: "milvus-coredump-controller"
+      nodeName: "${NODE_NAME:-controller}"
+      namespace: "default"
+      logLevel: "info"
+      metricsPort: 8091
+      healthPort: 8090
+
+    database:
+      path: "/data/controller.db"
+      maxOpenConns: 20
+      maxIdleConns: 10
+      connMaxLifetime: "1h"
+      retentionDays: 90
+
+    discovery:
+      scanInterval: "30s"
+      namespaces: ["default", "milvus-system"]
+      helmReleaseLabels:
+        - "app.kubernetes.io/name=milvus"
+      operatorLabels:
+        - "app.kubernetes.io/managed-by=milvus-operator"
+
+    analyzer:
+      enableGdbAnalysis: true
+      gdbTimeout: "5m"
+      valueThreshold: 4.0
+      ignorePatterns: ["pause", "fluentd"]
+      panicKeywords: ["panic", "fatal", "SIGSEGV", "SIGABRT", "SIGFPE", "stack trace"]
+      
+      aiAnalysis:
+        enabled: true
+        provider: "glm"
+        model: "glm-4.5-flash"
+        apiKey: "${GLM_API_KEY}"
+        baseURL: "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+        timeout: "30s"
+        maxTokens: 2000
+        temperature: 0.3
+        enableCostControl: true
+        maxCostPerMonth: 100.0
+        maxAnalysisPerHour: 50
+
+    storage:
+      backend: "local"
+      localPath: "/data/coredumps"
+      maxStorageSize: "10GB"
+      retentionDays: 30
+      compressionEnabled: true
+
+    cleaner:
+      enabled: true
+      maxRestartCount: 5
+      restartTimeWindow: "1h"
+      cleanupDelay: "5m"
+      uninstallTimeout: "10m"
+
+    monitor:
+      prometheusEnabled: true
+      metricsPath: "/metrics"

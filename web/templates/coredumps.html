@@ -1,0 +1,264 @@
+<!-- Coredumps List Template -->
+<div class="px-4 sm:px-6 lg:px-8">
+    <!-- Header -->
+    <div class="sm:flex sm:items-center mb-6">
+        <div class="sm:flex-auto">
+            <h1 class="text-3xl font-bold text-gray-900">
+                <i class="fas fa-file-medical text-primary-600 mr-3"></i>Coredump 文件
+            </h1>
+            <p class="mt-2 text-sm text-gray-600">已收集和分析的 coredump 文件列表</p>
+        </div>
+        <div class="mt-4 sm:mt-0 sm:ml-16 sm:flex-none flex space-x-2">
+            <!-- Sort Dropdown -->
+            <select 
+                class="rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm"
+                hx-get="/coredumps"
+                hx-target="#main-content"
+                hx-include="this"
+                hx-trigger="change"
+                name="sortBy">
+                <option value="time">按时间排序</option>
+                <option value="score">按评分排序</option>
+                <option value="size">按大小排序</option>
+                <option value="instance">按实例排序</option>
+            </select>
+            
+            <button 
+                type="button" 
+                class="inline-flex items-center justify-center rounded-md border border-transparent bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 sm:w-auto"
+                hx-get="/coredumps"
+                hx-target="#main-content"
+                hx-indicator="#loading">
+                <i class="fas fa-sync-alt mr-2"></i>刷新
+            </button>
+        </div>
+    </div>
+
+    {{if .Data}}
+    <!-- Coredumps Table -->
+    <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+        <table class="min-w-full divide-y divide-gray-300">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">文件</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">实例</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">大小</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">时间</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">评分</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">状态</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">分析</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                {{range .Data}}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4">
+                        <div class="flex items-start">
+                            <div class="flex-shrink-0 h-8 w-8">
+                                <div class="h-8 w-8 rounded-full bg-red-100 flex items-center justify-center">
+                                    <i class="fas fa-bug text-red-600 text-sm"></i>
+                                </div>
+                            </div>
+                            <div class="ml-4">
+                                <div class="text-sm font-medium text-gray-900 truncate max-w-xs">{{.File.FileName}}</div>
+                                <div class="text-xs text-gray-500 truncate max-w-xs">{{.File.Path}}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="text-sm text-gray-900">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                {{.InstanceNamespace}}
+                            </span>
+                            <div class="text-xs text-gray-600 mt-1">{{.InstanceName}}</div>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                            {{if gt .File.Size 104857600}}bg-red-100 text-red-800
+                            {{else if gt .File.Size 52428800}}bg-orange-100 text-orange-800
+                            {{else}}bg-green-100 text-green-800{{end}}">
+                            {{.File.Size | formatFileSize}}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {{.File.ModTime | formatTime}}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="flex items-center">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                {{if ge .ValueScore 7.0}}bg-green-100 text-green-800
+                                {{else if ge .ValueScore 4.0}}bg-yellow-100 text-yellow-800
+                                {{else}}bg-red-100 text-red-800{{end}}">
+                                {{printf "%.1f" .ValueScore}}
+                            </span>
+                            {{if ge .ValueScore 7.0}}
+                                <i class="fas fa-star text-yellow-500 ml-1"></i>
+                            {{end}}
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                            {{if eq .StorageStatus "stored"}}bg-green-100 text-green-800
+                            {{else if eq .StorageStatus "processing"}}bg-yellow-100 text-yellow-800
+                            {{else if eq .StorageStatus "failed"}}bg-red-100 text-red-800
+                            {{else}}bg-gray-100 text-gray-800{{end}}">
+                            {{if eq .StorageStatus "stored"}}已存储
+                            {{else if eq .StorageStatus "processing"}}处理中
+                            {{else if eq .StorageStatus "failed"}}失败
+                            {{else}}待处理{{end}}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="flex space-x-1">
+                            {{if .HasGdbAnalysis}}
+                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                    <i class="fas fa-terminal mr-1"></i>GDB
+                                </span>
+                            {{end}}
+                            {{if .HasAiAnalysis}}
+                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                                    <i class="fas fa-robot mr-1"></i>AI
+                                </span>
+                            {{end}}
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                        <!-- View Details Button -->
+                        <button 
+                            class="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                            hx-get="/coredumps/{{.File.Path | urlEncode}}/detail"
+                            hx-target="#detail-modal-content"
+                            hx-trigger="click"
+                            _="on click show #detail-modal then add .show to #detail-modal">
+                            <i class="fas fa-info-circle mr-1"></i>详情
+                        </button>
+                        
+                        {{if eq .StorageStatus "stored"}}
+                        <!-- Launch Viewer Button -->
+                        <button 
+                            class="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded text-green-700 bg-green-100 hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                            hx-post="/coredumps/{{.File.Path | urlEncode}}/view"
+                            hx-vals='{"duration": 30}'
+                            hx-target="#viewer-modal-content"
+                            hx-trigger="click"
+                            _="on click show #viewer-modal then add .show to #viewer-modal">
+                            <i class="fas fa-eye mr-1"></i>启动查看器
+                        </button>
+                        {{end}}
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    {{if gt .TotalPages 1}}
+    <div class="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6 mt-4">
+        <div class="flex-1 flex justify-between sm:hidden">
+            {{if gt .Page 1}}
+            <button 
+                class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                hx-get="/coredumps?page={{sub .Page 1}}"
+                hx-target="#main-content">
+                上一页
+            </button>
+            {{end}}
+            {{if lt .Page .TotalPages}}
+            <button 
+                class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                hx-get="/coredumps?page={{add .Page 1}}"
+                hx-target="#main-content">
+                下一页
+            </button>
+            {{end}}
+        </div>
+        <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+            <div>
+                <p class="text-sm text-gray-700">
+                    显示第 <span class="font-medium">{{sub (mul (sub .Page 1) .PageSize) | add 1}}</span> 到 
+                    <span class="font-medium">{{min (mul .Page .PageSize) .Total}}</span> 项，
+                    共 <span class="font-medium">{{.Total}}</span> 项
+                </p>
+            </div>
+            <div>
+                <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                    {{range $i := .Pages}}
+                    <button 
+                        class="relative inline-flex items-center px-4 py-2 border text-sm font-medium
+                            {{if eq $i $.Page}}border-primary-500 bg-primary-50 text-primary-600
+                            {{else}}border-gray-300 bg-white text-gray-500 hover:bg-gray-50{{end}}"
+                        hx-get="/coredumps?page={{$i}}"
+                        hx-target="#main-content">
+                        {{$i}}
+                    </button>
+                    {{end}}
+                </nav>
+            </div>
+        </div>
+    </div>
+    {{end}}
+
+    {{else}}
+    <!-- Empty State -->
+    <div class="text-center py-12">
+        <i class="fas fa-file-medical text-gray-400 text-6xl mb-4"></i>
+        <h3 class="mt-2 text-sm font-medium text-gray-900">暂无 Coredump 文件</h3>
+        <p class="mt-1 text-sm text-gray-500">系统中未发现任何 coredump 文件</p>
+        <div class="mt-6">
+            <button 
+                type="button" 
+                class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                hx-get="/coredumps"
+                hx-target="#main-content"
+                hx-indicator="#loading">
+                <i class="fas fa-sync-alt mr-2"></i>重新扫描
+            </button>
+        </div>
+    </div>
+    {{end}}
+</div>
+
+<!-- Detail Modal -->
+<div id="detail-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+    <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-4/5 lg:w-3/4 xl:w-2/3 shadow-lg rounded-md bg-white max-h-[80vh] overflow-y-auto">
+        <div class="mt-3">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-medium text-gray-900">
+                    <i class="fas fa-file-medical mr-2"></i>Coredump 详情
+                </h3>
+                <button 
+                    class="text-gray-400 hover:text-gray-600"
+                    _="on click hide #detail-modal then remove .show from #detail-modal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div id="detail-modal-content">
+                <!-- Detail content will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Viewer Modal -->
+<div id="viewer-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+    <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-1/2 shadow-lg rounded-md bg-white">
+        <div class="mt-3">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-medium text-gray-900">
+                    <i class="fas fa-eye mr-2"></i>Coredump 查看器
+                </h3>
+                <button 
+                    class="text-gray-400 hover:text-gray-600"
+                    _="on click hide #viewer-modal then remove .show from #viewer-modal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div id="viewer-modal-content">
+                <!-- Viewer content will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>

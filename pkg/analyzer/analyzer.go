@@ -12,14 +12,16 @@ import (
 	"k8s.io/klog/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"milvus-coredump-agent/pkg/collector"
-	"milvus-coredump-agent/pkg/config"
+	"milvus-diagnostic-platform/pkg/collector"
+	"milvus-diagnostic-platform/pkg/config"
+	"milvus-diagnostic-platform/pkg/controller"
 )
 
 type Analyzer struct {
-	config     *config.AnalyzerConfig
-	eventChan  chan AnalysisEvent
-	aiAnalyzer *AIAnalyzer
+	config           *config.AnalyzerConfig
+	eventChan        chan AnalysisEvent
+	aiAnalyzer       *AIAnalyzer
+	controllerClient *controller.Client
 }
 
 type AnalysisEvent struct {
@@ -37,7 +39,7 @@ const (
 	EventTypeAnalysisError    EventType = "analysis_error"
 )
 
-func New(config *config.AnalyzerConfig) *Analyzer {
+func New(config *config.AnalyzerConfig, controllerClient *controller.Client) *Analyzer {
 	aiAnalyzer, err := NewAIAnalyzer(&config.AIAnalysis)
 	if err != nil {
 		klog.Errorf("Failed to initialize AI analyzer: %v", err)
@@ -46,9 +48,10 @@ func New(config *config.AnalyzerConfig) *Analyzer {
 	}
 
 	return &Analyzer{
-		config:     config,
-		eventChan:  make(chan AnalysisEvent, 100),
-		aiAnalyzer: aiAnalyzer,
+		config:           config,
+		eventChan:        make(chan AnalysisEvent, 100),
+		aiAnalyzer:       aiAnalyzer,
+		controllerClient: controllerClient,
 	}
 }
 
@@ -124,8 +127,8 @@ func (a *Analyzer) analyzeCoredumpFile(coredump *collector.CoredumpFile) {
 		return
 	}
 
-	// Perform AI analysis if available and enabled
-	if a.aiAnalyzer != nil {
+	// Perform AI analysis if available, enabled, and approved by controller
+	if a.aiAnalyzer != nil && a.shouldPerformAIAnalysis(coredump, analysisResults) {
 		klog.V(2).Infof("Starting AI analysis for %s", coredump.Path)
 		
 		aiCtx, aiCancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -543,4 +546,68 @@ func (a *Analyzer) sendEvent(event AnalysisEvent) {
 	default:
 		klog.Warning("Analysis event channel is full, dropping event")
 	}
+}
+
+// shouldPerformAIAnalysis checks with controller if AI analysis should be performed
+func (a *Analyzer) shouldPerformAIAnalysis(coredump *collector.CoredumpFile, results *collector.AnalysisResults) bool {
+	// If controller client is not available, fallback to local decision
+	if a.controllerClient == nil {
+		klog.V(4).Info("No controller client available, using local AI analysis decision")
+		return a.config.AIAnalysis.Enabled
+	}
+
+	// Check if controller is reachable
+	if !a.controllerClient.IsControllerAvailable() {
+		klog.Warning("Controller not available, using local AI analysis decision")
+		return a.config.AIAnalysis.Enabled
+	}
+
+	// Calculate estimated cost (simple estimation based on token count)
+	estimatedCost := a.estimateAIAnalysisCost(results)
+
+	// Determine priority based on value score
+	priority := "medium"
+	if coredump.ValueScore >= 8.0 {
+		priority = "high"
+	} else if coredump.ValueScore <= 5.0 {
+		priority = "low"
+	}
+
+	// Request permission from controller
+	allowed, reason, err := a.controllerClient.RequestAIAnalysis(
+		coredump.Path, 
+		coredump.ValueScore, 
+		estimatedCost,
+		priority,
+	)
+
+	if err != nil {
+		klog.Errorf("Failed to request AI analysis permission from controller: %v", err)
+		// Fallback to local decision on error
+		return a.config.AIAnalysis.Enabled
+	}
+
+	if !allowed {
+		klog.V(2).Infof("AI analysis denied by controller for %s: %s", coredump.Path, reason)
+	} else {
+		klog.V(2).Infof("AI analysis approved by controller for %s", coredump.Path)
+	}
+
+	return allowed
+}
+
+// estimateAIAnalysisCost provides a rough estimate of AI analysis cost
+func (a *Analyzer) estimateAIAnalysisCost(results *collector.AnalysisResults) float64 {
+	// Simple estimation based on stack trace length and other factors
+	baseCost := 0.01 // Base cost per analysis
+	
+	if results != nil && results.StackTrace != "" {
+		// Estimate based on stack trace length (roughly correlates to token count)
+		tokenCount := len(results.StackTrace) / 4 // rough approximation
+		if tokenCount > 1000 {
+			baseCost += 0.02 // Additional cost for longer traces
+		}
+	}
+	
+	return baseCost
 }

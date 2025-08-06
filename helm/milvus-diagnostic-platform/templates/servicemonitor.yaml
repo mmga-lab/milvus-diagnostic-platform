@@ -1,0 +1,25 @@
+{{- if and .Values.monitoring.prometheus.enabled .Values.monitoring.prometheus.servicemonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "milvus-coredump-agent.fullname" . }}
+  {{- if .Values.monitoring.prometheus.servicemonitor.namespace }}
+  namespace: {{ .Values.monitoring.prometheus.servicemonitor.namespace }}
+  {{- else }}
+  namespace: {{ .Values.global.namespace }}
+  {{- end }}
+  labels:
+    {{- include "milvus-coredump-agent.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "milvus-coredump-agent.selectorLabels" . | nindent 6 }}
+  endpoints:
+  - port: metrics
+    interval: {{ .Values.monitoring.prometheus.servicemonitor.interval }}
+    path: /metrics
+    honorLabels: true
+  namespaceSelector:
+    matchNames:
+    - {{ .Values.global.namespace }}
+{{- end }}

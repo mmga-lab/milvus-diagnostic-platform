@@ -1,0 +1,113 @@
+# Development values for milvus-coredump-agent
+# This example shows a development/testing configuration
+
+global:
+  image:
+    repository: milvus-coredump-agent
+    tag: "latest"
+    pullPolicy: Always
+  namespace: default
+
+# Lightweight controller for development
+controller:
+  enabled: true
+  replicaCount: 1
+  
+  # Minimal resources for development
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+  # Use emptyDir for development (no persistence)
+  persistence:
+    enabled: false
+
+  # Development-friendly configuration
+  config:
+    logLevel: debug  # More verbose logging
+    database:
+      retentionDays: 7  # Shorter retention
+    aiAnalysis:
+      enabled: true
+      provider: glm
+      maxCostPerMonth: 50.0  # Lower budget for dev
+      maxAnalysisPerHour: 20
+    cleaner:
+      enabled: false  # Disable cleanup in dev
+
+# Lightweight agent for development
+agent:
+  enabled: true
+  
+  # Minimal resources
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 200m
+      memory: 256Mi
+
+  # Development-friendly configuration
+  config:
+    logLevel: debug
+    discovery:
+      scanInterval: 30s
+      namespaces:
+        - default
+        - milvus-dev
+    collector:
+      watchInterval: 10s
+      maxFileAge: 2h     # Short retention for dev
+      maxFileSize: 500MB # Smaller files in dev
+    analyzer:
+      enableGdbAnalysis: true
+      gdbTimeout: 3m
+      valueThreshold: 3.0  # Lower threshold to catch more files
+    storage:
+      backend: local
+      localPath: /data/coredumps
+      maxStorageSize: 5GB  # Limited storage in dev
+      retentionDays: 7
+      compressionEnabled: true
+
+# Enable dashboard for development debugging
+dashboard:
+  enabled: true
+  port: 8082
+  viewer:
+    enabled: true
+    defaultDuration: 15  # Shorter duration for dev
+    maxConcurrentPods: 2
+
+# Basic monitoring for development
+monitoring:
+  prometheus:
+    enabled: true
+    servicemonitor:
+      enabled: false  # Usually no prometheus in dev
+  grafana:
+    enabled: false
+
+# Standard RBAC
+rbac:
+  create: true
+
+serviceAccount:
+  create: true
+
+# Relaxed security for development
+securityContext:
+  runAsNonRoot: false
+  runAsUser: 0
+  fsGroup: 0
+
+# External dependencies for development
+external:
+  glmApiKey:
+    secret: milvus-coredump-secrets
+    key: glm-api-key

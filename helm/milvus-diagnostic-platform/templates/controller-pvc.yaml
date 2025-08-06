@@ -1,0 +1,19 @@
+{{- if and .Values.controller.enabled .Values.controller.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "milvus-coredump-agent.fullname" . }}-controller-data
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "milvus-coredump-agent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: controller
+spec:
+  accessModes:
+    - {{ .Values.controller.persistence.accessMode }}
+  {{- if .Values.controller.persistence.storageClass }}
+  storageClassName: {{ .Values.controller.persistence.storageClass | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.controller.persistence.size | quote }}
+{{- end }}

@@ -1,0 +1,111 @@
+{{- if .Values.agent.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "milvus-coredump-agent.fullname" . }}-agent-config
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "milvus-coredump-agent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: agent
+data:
+  config.yaml: |
+    agent:
+      name: {{ include "milvus-coredump-agent.fullname" . }}-agent
+      nodeName: "${NODE_NAME:-unknown}"
+      namespace: {{ .Values.global.namespace | quote }}
+      logLevel: {{ .Values.agent.config.logLevel | quote }}
+      metricsPort: 8080
+      healthPort: 8081
+
+    {{- if .Values.controller.enabled }}
+    controller:
+      enabled: true
+      url: "http://{{ include "milvus-coredump-agent.fullname" . }}-controller:{{ .Values.controller.service.api.port }}"
+      timeout: "30s"
+      heartbeatInterval: "60s"
+    {{- else }}
+    controller:
+      enabled: false
+    {{- end }}
+
+    database:
+      path: "./data/coredump_agent.db"
+      maxOpenConns: 10
+      maxIdleConns: 5
+      connMaxLifetime: "1h"
+      retentionDays: 30
+
+    discovery:
+      scanInterval: {{ .Values.agent.config.discovery.scanInterval | quote }}
+      namespaces:
+        {{- range .Values.agent.config.discovery.namespaces }}
+        - {{ . | quote }}
+        {{- end }}
+      helmReleaseLabels:
+        - "app.kubernetes.io/name=milvus"
+      operatorLabels:
+        - "app.kubernetes.io/managed-by=milvus-operator"
+
+    collector:
+      coredumpPath: {{ .Values.agent.config.collector.coredumpPath | quote }}
+      hostCoredumpPath: {{ .Values.agent.config.collector.coredumpPath | quote }}
+      watchInterval: {{ .Values.agent.config.collector.watchInterval | quote }}
+      maxFileAge: {{ .Values.agent.config.collector.maxFileAge | quote }}
+      maxFileSize: {{ .Values.agent.config.collector.maxFileSize | quote }}
+
+    analyzer:
+      enableGdbAnalysis: {{ .Values.agent.config.analyzer.enableGdbAnalysis }}
+      gdbTimeout: {{ .Values.agent.config.analyzer.gdbTimeout | quote }}
+      valueThreshold: {{ .Values.agent.config.analyzer.valueThreshold }}
+      ignorePatterns: ["pause", "fluentd"]
+      panicKeywords: ["panic", "fatal", "SIGSEGV", "SIGABRT", "SIGFPE", "stack trace"]
+      
+      aiAnalysis:
+        enabled: {{ .Values.controller.config.aiAnalysis.enabled }}
+        provider: {{ .Values.controller.config.aiAnalysis.provider | quote }}
+        model: {{ .Values.controller.config.aiAnalysis.model | quote }}
+        apiKey: "${GLM_API_KEY}"
+        baseURL: "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+        timeout: "30s"
+        maxTokens: 2000
+        temperature: 0.3
+        enableCostControl: true
+        maxCostPerMonth: {{ .Values.controller.config.aiAnalysis.maxCostPerMonth }}
+        maxAnalysisPerHour: {{ .Values.controller.config.aiAnalysis.maxAnalysisPerHour }}
+
+    storage:
+      backend: {{ .Values.agent.config.storage.backend | quote }}
+      localPath: {{ .Values.agent.config.storage.localPath | quote }}
+      maxStorageSize: {{ .Values.agent.config.storage.maxStorageSize | quote }}
+      retentionDays: {{ .Values.agent.config.storage.retentionDays }}
+      compressionEnabled: {{ .Values.agent.config.storage.compressionEnabled }}
+
+    cleaner:
+      enabled: {{ .Values.controller.config.cleaner.enabled }}
+      maxRestartCount: {{ .Values.controller.config.cleaner.maxRestartCount }}
+      restartTimeWindow: "1h"
+      cleanupDelay: "5m"
+      uninstallTimeout: "10m"
+
+    monitor:
+      prometheusEnabled: {{ .Values.monitoring.prometheus.enabled }}
+      metricsPath: "/metrics"
+
+    {{- if .Values.dashboard.enabled }}
+    dashboard:
+      enabled: {{ .Values.dashboard.enabled }}
+      port: {{ .Values.dashboard.port }}
+      path: "/dashboard"
+      serveStatic: true
+      staticPath: "/opt/milvus-coredump-agent/web/static"
+      viewerNamespace: {{ .Values.global.namespace | quote }}
+      viewer:
+        enabled: {{ .Values.dashboard.viewer.enabled }}
+        image: "ubuntu:22.04"
+        defaultDuration: {{ .Values.dashboard.viewer.defaultDuration }}
+        maxDuration: 120
+        maxConcurrentPods: {{ .Values.dashboard.viewer.maxConcurrentPods }}
+        coredumpPath: {{ .Values.agent.config.collector.coredumpPath | quote }}
+        webTerminalPort: 7681
+    {{- end }}
+{{- end }}

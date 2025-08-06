@@ -8,21 +8,43 @@ import (
 )
 
 type Config struct {
-	Agent     AgentConfig     `mapstructure:"agent"`
-	Discovery DiscoveryConfig `mapstructure:"discovery"`
-	Collector CollectorConfig `mapstructure:"collector"`
-	Analyzer  AnalyzerConfig  `mapstructure:"analyzer"`
-	Storage   StorageConfig   `mapstructure:"storage"`
-	Cleaner   CleanerConfig   `mapstructure:"cleaner"`
-	Monitor   MonitorConfig   `mapstructure:"monitor"`
+	Agent           AgentConfig           `mapstructure:"agent"`
+	Controller      ControllerConfig      `mapstructure:"controller"`
+	Database        DatabaseConfig        `mapstructure:"database"`
+	Discovery       DiscoveryConfig       `mapstructure:"discovery"`
+	Collector       CollectorConfig       `mapstructure:"collector"`
+	LogCollector    LogCollectorConfig    `mapstructure:"logCollector"`
+	MetricsCollector MetricsCollectorConfig `mapstructure:"metricsCollector"`
+	Analyzer        AnalyzerConfig        `mapstructure:"analyzer"`
+	Storage         StorageConfig         `mapstructure:"storage"`
+	Cleaner         CleanerConfig         `mapstructure:"cleaner"`
+	Monitor         MonitorConfig         `mapstructure:"monitor"`
+	Dashboard       DashboardConfig       `mapstructure:"dashboard"`
+	Reporter        ReporterConfig        `mapstructure:"reporter"`
 }
 
 type AgentConfig struct {
 	Name        string `mapstructure:"name"`
+	NodeName    string `mapstructure:"nodeName"`
 	Namespace   string `mapstructure:"namespace"`
 	LogLevel    string `mapstructure:"logLevel"`
 	MetricsPort int    `mapstructure:"metricsPort"`
 	HealthPort  int    `mapstructure:"healthPort"`
+}
+
+type ControllerConfig struct {
+	Enabled           bool          `mapstructure:"enabled"`
+	URL               string        `mapstructure:"url"`
+	Timeout           time.Duration `mapstructure:"timeout"`
+	HeartbeatInterval time.Duration `mapstructure:"heartbeatInterval"`
+}
+
+type DatabaseConfig struct {
+	Path            string        `mapstructure:"path"`
+	MaxOpenConns    int           `mapstructure:"maxOpenConns"`
+	MaxIdleConns    int           `mapstructure:"maxIdleConns"`
+	ConnMaxLifetime time.Duration `mapstructure:"connMaxLifetime"`
+	RetentionDays   int           `mapstructure:"retentionDays"`
 }
 
 type DiscoveryConfig struct {
@@ -98,6 +120,138 @@ type AlertingConfig struct {
 	WebhookURL string `mapstructure:"webhookUrl"`
 }
 
+type DashboardConfig struct {
+	Enabled         bool               `mapstructure:"enabled"`
+	Port            int                `mapstructure:"port"`
+	Path            string             `mapstructure:"path"`
+	ServeStatic     bool               `mapstructure:"serveStatic"`
+	StaticPath      string             `mapstructure:"staticPath"`
+	ViewerNamespace string             `mapstructure:"viewerNamespace"`
+	Viewer          ViewerConfig       `mapstructure:"viewer"`
+}
+
+type ViewerConfig struct {
+	Enabled           bool   `mapstructure:"enabled"`
+	Image             string `mapstructure:"image"`
+	ImagePullPolicy   string `mapstructure:"imagePullPolicy"`
+	DefaultDuration   int    `mapstructure:"defaultDuration"`
+	MaxDuration       int    `mapstructure:"maxDuration"`
+	MaxConcurrentPods int    `mapstructure:"maxConcurrentPods"`
+	CoredumpPath      string `mapstructure:"coredumpPath"`
+	WebTerminalPort   int    `mapstructure:"webTerminalPort"`
+}
+
+type LogCollectorConfig struct {
+	Enabled     bool              `mapstructure:"enabled"`
+	Source      string            `mapstructure:"source"` // "loki" or "file"
+	Loki        LokiConfig        `mapstructure:"loki"`
+	Patterns    LogPatternConfig  `mapstructure:"patterns"`
+	BufferSize  int               `mapstructure:"bufferSize"`
+}
+
+type LogPatternConfig struct {
+	ErrorPatterns    []string `mapstructure:"errorPatterns"`
+	WarningPatterns  []string `mapstructure:"warningPatterns"`
+	ExcludePatterns  []string `mapstructure:"excludePatterns"`
+	TimestampFormat  string   `mapstructure:"timestampFormat"`
+	Multiline        bool     `mapstructure:"multiline"`
+	MultilinePattern string   `mapstructure:"multilinePattern"`
+}
+
+type LokiConfig struct {
+	URL             string          `mapstructure:"url"`
+	Timeout         time.Duration   `mapstructure:"timeout"`
+	BatchSize       int             `mapstructure:"batchSize"`
+	QueryInterval   time.Duration   `mapstructure:"queryInterval"`
+	LookbackWindow  time.Duration   `mapstructure:"lookbackWindow"`
+	Queries         []LokiQuery     `mapstructure:"queries"`
+}
+
+type LokiQuery struct {
+	Name   string   `mapstructure:"name"`
+	Query  string   `mapstructure:"query"`
+	Labels []string `mapstructure:"labels"`
+}
+
+type MetricsCollectorConfig struct {
+	Enabled            bool                    `mapstructure:"enabled"`
+	Source             string                  `mapstructure:"source"` // "prometheus" or "direct"
+	Prometheus         PrometheusConfig        `mapstructure:"prometheus"`
+	CollectionInterval time.Duration           `mapstructure:"collectionInterval"`
+	RetentionPeriod    time.Duration           `mapstructure:"retentionPeriod"`
+}
+
+type PrometheusConfig struct {
+	URL             string               `mapstructure:"url"`
+	Timeout         time.Duration        `mapstructure:"timeout"`
+	QueryInterval   time.Duration        `mapstructure:"queryInterval"`
+	LookbackWindow  time.Duration        `mapstructure:"lookbackWindow"`
+	Queries         []PrometheusQuery    `mapstructure:"queries"`
+}
+
+type PrometheusQuery struct {
+	Name   string   `mapstructure:"name"`
+	Query  string   `mapstructure:"query"`
+	Labels []string `mapstructure:"labels"`
+}
+
+
+type ReporterConfig struct {
+	Enabled           bool                `mapstructure:"enabled"`
+	OutputPath        string              `mapstructure:"outputPath"`
+	Schedule          ScheduleConfig      `mapstructure:"schedule"`
+	Templates         TemplateConfig      `mapstructure:"templates"`
+	Delivery          DeliveryConfig      `mapstructure:"delivery"`
+	RetentionPeriod   time.Duration       `mapstructure:"retentionPeriod"`
+	IncludeMetrics    []string            `mapstructure:"includeMetrics"`
+}
+
+type ScheduleConfig struct {
+	Daily     bool   `mapstructure:"daily"`
+	Weekly    bool   `mapstructure:"weekly"`
+	Monthly   bool   `mapstructure:"monthly"`
+	DailyAt   string `mapstructure:"dailyAt"`
+	WeeklyAt  string `mapstructure:"weeklyAt"`
+	MonthlyAt string `mapstructure:"monthlyAt"`
+}
+
+type TemplateConfig struct {
+	DefaultTemplate string            `mapstructure:"defaultTemplate"`
+	CustomTemplates map[string]string `mapstructure:"customTemplates"`
+	Format          string            `mapstructure:"format"`
+}
+
+type DeliveryConfig struct {
+	Email    EmailConfig     `mapstructure:"email"`
+	Webhook  WebhookConfig   `mapstructure:"webhook"`
+	Storage  StorageDelivery `mapstructure:"storage"`
+}
+
+type EmailConfig struct {
+	Enabled    bool     `mapstructure:"enabled"`
+	SMTPHost   string   `mapstructure:"smtpHost"`
+	SMTPPort   int      `mapstructure:"smtpPort"`
+	Username   string   `mapstructure:"username"`
+	Password   string   `mapstructure:"password"`
+	From       string   `mapstructure:"from"`
+	Recipients []string `mapstructure:"recipients"`
+	Subject    string   `mapstructure:"subject"`
+}
+
+type WebhookConfig struct {
+	Enabled bool   `mapstructure:"enabled"`
+	URL     string `mapstructure:"url"`
+	Method  string `mapstructure:"method"`
+	Headers map[string]string `mapstructure:"headers"`
+	Timeout time.Duration     `mapstructure:"timeout"`
+}
+
+type StorageDelivery struct {
+	Enabled    bool   `mapstructure:"enabled"`
+	Path       string `mapstructure:"path"`
+	MaxReports int    `mapstructure:"maxReports"`
+}
+
 func Load(configPath string) (*Config, error) {
 	viper.SetConfigFile(configPath)
 	viper.SetConfigType("yaml")
@@ -129,6 +283,35 @@ func (c *Config) Validate() error {
 	
 	if c.Storage.Backend != "local" && c.Storage.Backend != "s3" && c.Storage.Backend != "nfs" {
 		return fmt.Errorf("unsupported storage backend: %s", c.Storage.Backend)
+	}
+	
+	// Validate LogCollector config
+	if c.LogCollector.Enabled {
+		if c.LogCollector.Source == "loki" {
+			if c.LogCollector.Loki.URL == "" {
+				return fmt.Errorf("log collector enabled with Loki source but no URL specified")
+			}
+			if len(c.LogCollector.Loki.Queries) == 0 {
+				return fmt.Errorf("log collector enabled with Loki source but no queries specified")
+			}
+		}
+	}
+	
+	// Validate MetricsCollector config
+	if c.MetricsCollector.Enabled {
+		if c.MetricsCollector.CollectionInterval <= 0 {
+			return fmt.Errorf("metrics collector interval must be positive")
+		}
+	}
+	
+	// Validate Reporter config
+	if c.Reporter.Enabled {
+		if c.Reporter.OutputPath == "" {
+			return fmt.Errorf("reporter enabled but no output path specified")
+		}
+		if !c.Reporter.Schedule.Daily && !c.Reporter.Schedule.Weekly && !c.Reporter.Schedule.Monthly {
+			return fmt.Errorf("reporter enabled but no schedule configured")
+		}
 	}
 	
 	return nil

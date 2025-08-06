@@ -1,0 +1,363 @@
+/* Milvus Coredump Agent Dashboard Styles */
+
+:root {
+    --primary-color: #007bff;
+    --secondary-color: #6c757d;
+    --success-color: #28a745;
+    --danger-color: #dc3545;
+    --warning-color: #ffc107;
+    --info-color: #17a2b8;
+    --light-color: #f8f9fa;
+    --dark-color: #343a40;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f5f5f5;
+}
+
+/* 导航栏样式 */
+.navbar-brand {
+    font-weight: bold;
+    font-size: 1.3rem;
+}
+
+.navbar-text {
+    font-size: 0.9rem;
+}
+
+.navbar-text .text-success {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+/* 卡片样式 */
+.card {
+    border: none;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+}
+
+.card-header {
+    background-color: white;
+    border-bottom: 2px solid #e9ecef;
+    border-radius: 10px 10px 0 0 !important;
+    font-weight: 600;
+}
+
+/* 统计卡片样式 */
+.card.bg-primary,
+.card.bg-info,
+.card.bg-success,
+.card.bg-warning {
+    border-radius: 15px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+
+.card.bg-primary .card-body h2,
+.card.bg-info .card-body h2,
+.card.bg-success .card-body h2,
+.card.bg-warning .card-body h2 {
+    font-size: 2.5rem;
+    font-weight: bold;
+    margin-bottom: 0;
+}
+
+/* 表格样式 */
+.table {
+    margin-bottom: 0;
+}
+
+.table th {
+    border-top: none;
+    font-weight: 600;
+    background-color: #f8f9fa;
+    color: var(--dark-color);
+    white-space: nowrap;
+}
+
+.table td {
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+/* 状态标签样式 */
+.status-badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 20px;
+}
+
+.status-running { background-color: var(--success-color); }
+.status-failed { background-color: var(--danger-color); }
+.status-pending { background-color: var(--warning-color); }
+.status-terminating { background-color: var(--secondary-color); }
+
+/* 评分显示样式 */
+.score-display {
+    display: inline-flex;
+    align-items: center;
+    font-weight: bold;
+}
+
+.score-high { color: var(--success-color); }
+.score-medium { color: var(--warning-color); }
+.score-low { color: var(--danger-color); }
+
+.score-stars {
+    margin-left: 0.5rem;
+    color: #ffd700;
+}
+
+/* 文件大小显示 */
+.file-size {
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+}
+
+/* 时间显示 */
+.time-display {
+    color: var(--secondary-color);
+    font-size: 0.9rem;
+}
+
+/* 按钮样式 */
+.btn {
+    border-radius: 20px;
+    font-weight: 500;
+}
+
+.btn-sm {
+    border-radius: 15px;
+}
+
+.action-buttons .btn {
+    margin-right: 0.25rem;
+    margin-bottom: 0.25rem;
+}
+
+/* 分页样式 */
+.pagination .page-link {
+    border-radius: 20px;
+    margin: 0 2px;
+    border: none;
+    color: var(--primary-color);
+}
+
+.pagination .page-item.active .page-link {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+/* 模态框样式 */
+.modal-dialog {
+    margin: 1.75rem auto;
+}
+
+.modal-content {
+    border-radius: 15px;
+    border: none;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+}
+
+.modal-header {
+    border-bottom: 2px solid #e9ecef;
+    border-radius: 15px 15px 0 0;
+}
+
+.modal-footer {
+    border-top: 2px solid #e9ecef;
+    border-radius: 0 0 15px 15px;
+}
+
+/* 详情面板样式 */
+.detail-panel {
+    background-color: #f8f9fa;
+    border-radius: 10px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.detail-panel h6 {
+    color: var(--primary-color);
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.detail-panel .detail-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.25rem;
+}
+
+.detail-item .label {
+    font-weight: 500;
+    color: var(--dark-color);
+}
+
+.detail-item .value {
+    color: var(--secondary-color);
+}
+
+/* 代码显示样式 */
+.code-block {
+    background-color: #2d3748;
+    color: #e2e8f0;
+    border-radius: 8px;
+    padding: 1rem;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+/* 加载状态 */
+.loading {
+    text-align: center;
+    padding: 2rem;
+    color: var(--secondary-color);
+}
+
+.loading i {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* 空状态 */
+.empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--secondary-color);
+}
+
+.empty-state i {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+    color: #dee2e6;
+}
+
+/* AI分析标识 */
+.ai-badge {
+    background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-size: 0.7rem;
+    padding: 0.15rem 0.4rem;
+    border-radius: 10px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .container-fluid {
+        padding: 0 10px;
+    }
+    
+    .card-body {
+        padding: 1rem 0.75rem;
+    }
+    
+    .table-responsive {
+        border-radius: 10px;
+    }
+    
+    .action-buttons {
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .action-buttons .btn {
+        margin: 0.125rem 0;
+    }
+}
+
+@media (max-width: 576px) {
+    .card.bg-primary .card-body h2,
+    .card.bg-info .card-body h2,
+    .card.bg-success .card-body h2,
+    .card.bg-warning .card-body h2 {
+        font-size: 2rem;
+    }
+    
+    .navbar-brand {
+        font-size: 1.1rem;
+    }
+}
+
+/* 图表容器样式 */
+.chart-container {
+    position: relative;
+    height: 300px;
+    width: 100%;
+}
+
+/* 活动列表样式 */
+.activity-item {
+    border-left: 3px solid var(--primary-color);
+    padding-left: 1rem;
+    margin-bottom: 1rem;
+}
+
+.activity-item .time {
+    font-size: 0.8rem;
+    color: var(--secondary-color);
+}
+
+.activity-item .message {
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+}
+
+.activity-item .details {
+    font-size: 0.9rem;
+    color: var(--secondary-color);
+}
+
+/* 评分分解显示 */
+.score-breakdown {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.score-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.score-item:last-child {
+    border-bottom: none;
+    font-weight: bold;
+    margin-top: 0.5rem;
+    padding-top: 1rem;
+    border-top: 2px solid #e9ecef;
+}
+
+.score-bar {
+    width: 100px;
+    height: 8px;
+    background-color: #e9ecef;
+    border-radius: 4px;
+    margin-left: 1rem;
+    overflow: hidden;
+}
+
+.score-progress {
+    height: 100%;
+    background: linear-gradient(90deg, #28a745, #ffc107, #dc3545);
+    transition: width 0.3s ease;
+}

@@ -1,0 +1,214 @@
+<!-- Instances List Template -->
+<div class="px-4 sm:px-6 lg:px-8">
+    <!-- Header -->
+    <div class="sm:flex sm:items-center mb-6">
+        <div class="sm:flex-auto">
+            <h1 class="text-3xl font-bold text-gray-900">
+                <i class="fas fa-server text-primary-600 mr-3"></i>Milvus 实例
+            </h1>
+            <p class="mt-2 text-sm text-gray-600">集群中发现的 Milvus 实例列表</p>
+        </div>
+        <div class="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
+            <button 
+                type="button" 
+                class="inline-flex items-center justify-center rounded-md border border-transparent bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 sm:w-auto"
+                hx-get="/instances"
+                hx-target="#main-content"
+                hx-indicator="#loading">
+                <i class="fas fa-sync-alt mr-2"></i>刷新
+            </button>
+        </div>
+    </div>
+
+    {{if .Data}}
+    <!-- Instances Table -->
+    <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+        <table class="min-w-full divide-y divide-gray-300">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">实例</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">命名空间</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">类型</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">状态</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pod数量</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Coredumps</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">最后活动</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                {{range .Data}}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0 h-8 w-8">
+                                <div class="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center">
+                                    <i class="fas fa-database text-primary-600 text-sm"></i>
+                                </div>
+                            </div>
+                            <div class="ml-4">
+                                <div class="text-sm font-medium text-gray-900">{{.Instance.Name}}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            {{.Instance.Namespace}}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                            {{if eq .Instance.Type "helm"}}bg-green-100 text-green-800
+                            {{else}}bg-purple-100 text-purple-800{{end}}">
+                            <i class="{{if eq .Instance.Type "helm"}}fab fa-helm{{else}}fas fa-cog{{end}} mr-1"></i>
+                            {{if eq .Instance.Type "helm"}}Helm{{else}}Operator{{end}}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                            {{if eq .Status "running"}}bg-green-100 text-green-800
+                            {{else if eq .Status "pending"}}bg-yellow-100 text-yellow-800
+                            {{else}}bg-red-100 text-red-800{{end}}">
+                            <div class="w-1.5 h-1.5 rounded-full mr-1 
+                                {{if eq .Status "running"}}bg-green-500
+                                {{else if eq .Status "pending"}}bg-yellow-500
+                                {{else}}bg-red-500{{end}}"></div>
+                            {{if eq .Status "running"}}运行中
+                            {{else if eq .Status "pending"}}启动中
+                            {{else}}异常{{end}}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            {{.PodCount}}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                            {{if gt .CoredumpCount 0}}bg-orange-100 text-orange-800
+                            {{else}}bg-gray-100 text-gray-600{{end}}">
+                            {{.CoredumpCount}}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {{if .LastActivity}}
+                            {{.LastActivity | formatTime}}
+                            {{if gt .RecentRestarts 0}}
+                                <br><small class="text-red-600">最近{{.RecentRestarts}}次重启</small>
+                            {{end}}
+                        {{else}}
+                            -
+                        {{end}}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                        <!-- View Pods Button -->
+                        <button 
+                            class="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded text-primary-700 bg-primary-100 hover:bg-primary-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                            hx-get="/instances/{{.Instance.Name}}/pods?namespace={{.Instance.Namespace}}"
+                            hx-target="#modal-content"
+                            hx-trigger="click"
+                            _="on click show #modal then add .show to #modal">
+                            <i class="fas fa-eye mr-1"></i>查看Pod
+                        </button>
+                        
+                        {{if gt .CoredumpCount 0}}
+                        <!-- View Coredumps Button -->
+                        <button 
+                            class="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded text-orange-700 bg-orange-100 hover:bg-orange-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
+                            hx-get="/coredumps?instance={{.Instance.Name}}"
+                            hx-target="#main-content">
+                            <i class="fas fa-file-medical mr-1"></i>查看Coredumps
+                        </button>
+                        {{end}}
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    {{if gt .TotalPages 1}}
+    <div class="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6 mt-4">
+        <div class="flex-1 flex justify-between sm:hidden">
+            {{if gt .Page 1}}
+            <button 
+                class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                hx-get="/instances?page={{sub .Page 1}}"
+                hx-target="#main-content">
+                上一页
+            </button>
+            {{end}}
+            {{if lt .Page .TotalPages}}
+            <button 
+                class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                hx-get="/instances?page={{add .Page 1}}"
+                hx-target="#main-content">
+                下一页
+            </button>
+            {{end}}
+        </div>
+        <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+            <div>
+                <p class="text-sm text-gray-700">
+                    显示第 <span class="font-medium">{{sub (mul (sub .Page 1) .PageSize) | add 1}}</span> 到 
+                    <span class="font-medium">{{min (mul .Page .PageSize) .Total}}</span> 项，
+                    共 <span class="font-medium">{{.Total}}</span> 项
+                </p>
+            </div>
+            <div>
+                <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                    {{range $i := .Pages}}
+                    <button 
+                        class="relative inline-flex items-center px-4 py-2 border text-sm font-medium
+                            {{if eq $i $.Page}}border-primary-500 bg-primary-50 text-primary-600
+                            {{else}}border-gray-300 bg-white text-gray-500 hover:bg-gray-50{{end}}"
+                        hx-get="/instances?page={{$i}}"
+                        hx-target="#main-content">
+                        {{$i}}
+                    </button>
+                    {{end}}
+                </nav>
+            </div>
+        </div>
+    </div>
+    {{end}}
+
+    {{else}}
+    <!-- Empty State -->
+    <div class="text-center py-12">
+        <i class="fas fa-server text-gray-400 text-6xl mb-4"></i>
+        <h3 class="mt-2 text-sm font-medium text-gray-900">暂无实例</h3>
+        <p class="mt-1 text-sm text-gray-500">集群中未发现 Milvus 实例</p>
+        <div class="mt-6">
+            <button 
+                type="button" 
+                class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                hx-get="/instances"
+                hx-target="#main-content"
+                hx-indicator="#loading">
+                <i class="fas fa-sync-alt mr-2"></i>重新扫描
+            </button>
+        </div>
+    </div>
+    {{end}}
+</div>
+
+<!-- Modal for Pod Details -->
+<div id="modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+    <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
+        <div class="mt-3">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-medium text-gray-900">Pod 详情</h3>
+                <button 
+                    class="text-gray-400 hover:text-gray-600"
+                    _="on click hide #modal then remove .show from #modal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div id="modal-content">
+                <!-- Pod details will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>

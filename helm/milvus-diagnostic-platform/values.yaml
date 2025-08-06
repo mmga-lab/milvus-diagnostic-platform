@@ -1,0 +1,197 @@
+# Default values for milvus-coredump-agent
+# This is a YAML-formatted file.
+
+# Global settings
+global:
+  # Image settings
+  image:
+    registry: ""
+    repository: milvus-coredump-agent
+    tag: latest
+    pullPolicy: IfNotPresent
+    # pullSecrets: []
+
+  # Namespace to deploy in
+  namespace: default
+
+# Controller configuration
+controller:
+  enabled: true
+  
+  # Deployment settings
+  replicaCount: 1
+  
+  # Image settings (overrides global if specified)
+  image:
+    repository: ""
+    tag: ""
+    pullPolicy: ""
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    api:
+      port: 8090
+      targetPort: 8090
+    metrics:
+      port: 8091
+      targetPort: 8091
+
+  # Resource limits
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+  # Persistence for controller database
+  persistence:
+    enabled: true
+    storageClass: ""
+    accessMode: ReadWriteOnce
+    size: 10Gi
+
+  # Node selection
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  # Configuration
+  config:
+    logLevel: info
+    database:
+      retentionDays: 90
+    aiAnalysis:
+      enabled: true
+      provider: glm
+      model: glm-4.5-flash
+      maxCostPerMonth: 100.0
+      maxAnalysisPerHour: 50
+    cleaner:
+      enabled: true
+      maxRestartCount: 5
+
+# Agent (DaemonSet) configuration  
+agent:
+  enabled: true
+
+  # Image settings (overrides global if specified)
+  image:
+    repository: ""
+    tag: ""
+    pullPolicy: ""
+
+  # DaemonSet settings
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+
+  # Resource limits
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 200m
+      memory: 256Mi
+
+  # Host access permissions
+  hostNetwork: true
+  hostPID: true
+  privileged: true
+
+  # Node selection
+  nodeSelector: {}
+  tolerations:
+    - key: node-role.kubernetes.io/master
+      operator: Exists
+      effect: NoSchedule
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+
+  # Configuration
+  config:
+    logLevel: info
+    discovery:
+      scanInterval: 30s
+      namespaces:
+        - default
+        - milvus-system
+    collector:
+      coredumpPath: /host/var/lib/systemd/coredump
+      watchInterval: 10s
+      maxFileAge: 24h
+      maxFileSize: 1GB
+    analyzer:
+      enableGdbAnalysis: true
+      gdbTimeout: 5m
+      valueThreshold: 4.0
+    storage:
+      backend: local
+      localPath: /data/coredumps
+      maxStorageSize: 10GB
+      retentionDays: 30
+      compressionEnabled: true
+
+# Dashboard configuration
+dashboard:
+  enabled: true
+  port: 8082
+  viewer:
+    enabled: true
+    defaultDuration: 30 # minutes
+    maxConcurrentPods: 3
+
+# Monitoring configuration
+monitoring:
+  # Prometheus metrics
+  prometheus:
+    enabled: true
+    servicemonitor:
+      enabled: false
+      namespace: ""
+      interval: 30s
+
+  # Grafana dashboard
+  grafana:
+    enabled: true
+    dashboardsConfigMap: milvus-coredump-dashboards
+
+# RBAC configuration
+rbac:
+  create: true
+  
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# Security context
+securityContext:
+  runAsNonRoot: false
+  runAsUser: 0
+  fsGroup: 0
+
+# External dependencies
+external:
+  # GLM API key (can be set via secret)
+  glmApiKey:
+    secret: milvus-coredump-secrets
+    key: glm-api-key
+  
+  # Optional: External storage (S3, NFS, etc.)
+  storage:
+    s3:
+      enabled: false
+      bucket: ""
+      region: ""
+      accessKey:
+        secret: s3-credentials
+        key: access-key
+      secretKey:
+        secret: s3-credentials  
+        key: secret-key

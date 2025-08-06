@@ -1,10 +1,26 @@
 agent:
   # Agent configuration
-  name: "milvus-coredump-agent"
+  name: "milvus-diagnostic-agent"
+  nodeName: "${NODE_NAME:-unknown}"
   namespace: "default"
   logLevel: "info"
   metricsPort: 8080
   healthPort: 8081
+
+controller:
+  # Controller coordination (optional)
+  enabled: true
+  url: "http://milvus-diagnostic-controller:8090"
+  timeout: "30s"
+  heartbeatInterval: "60s"
+
+database:
+  # Database configuration
+  path: "./data/diagnostic_agent.db"
+  maxOpenConns: 10
+  maxIdleConns: 5
+  connMaxLifetime: "1h"
+  retentionDays: 30
 
 discovery:
   # Milvus instance discovery settings
@@ -58,7 +74,7 @@ analyzer:
 storage:
   # Storage configuration
   backend: "local"  # local, s3, nfs
-  localPath: "/data/coredumps"
+  localPath: "./data/coredumps"
   maxStorageSize: "50GB"
   retentionDays: 30
   compressionEnabled: true
@@ -85,3 +101,137 @@ monitor:
   alerting:
     enabled: true
     webhookUrl: ""
+
+dashboard:
+  # Web Dashboard configuration
+  enabled: true
+  port: 8082
+  path: "/dashboard"
+  serveStatic: true
+  staticPath: "./web/static"
+  viewerNamespace: "default"
+  viewer:
+    enabled: true
+    image: "ubuntu:22.04"  # 或使用专门的调试镜像
+    imagePullPolicy: "IfNotPresent"
+    defaultDuration: 30  # 分钟
+    maxDuration: 120     # 分钟
+    maxConcurrentPods: 3
+    coredumpPath: "/host/var/lib/systemd/coredump"
+    webTerminalPort: 7681
+
+logCollector:
+  # 从 Loki 收集日志配置
+  enabled: true
+  source: "loki"  # 数据源类型：loki
+  loki:
+    url: "http://loki:3100"
+    timeout: "30s"
+    batchSize: 1000
+    queryInterval: "1m"
+    lookbackWindow: "5m"
+    # Loki 查询配置
+    queries:
+      - name: "milvus_errors"
+        query: '{namespace=~"default|milvus-system"} |~ "(?i)(error|fatal|panic|exception)"'
+        labels: ["namespace", "pod", "container"]
+      - name: "milvus_warnings" 
+        query: '{namespace=~"default|milvus-system"} |~ "(?i)(warn|warning)"'
+        labels: ["namespace", "pod", "container"]
+      - name: "diagnostic_agent_logs"
+        query: '{job="milvus-diagnostic-agent"}'
+        labels: ["namespace", "pod"]
+  patterns:
+    errorPatterns:
+      - "ERROR"
+      - "FATAL" 
+      - "PANIC"
+      - "Exception"
+      - "failed"
+      - "error"
+    warningPatterns:
+      - "WARN"
+      - "WARNING"
+      - "warn"
+    excludePatterns:
+      - "healthz"
+      - "readyz"
+      - "metrics"
+    timestampFormat: "2006-01-02T15:04:05.000Z"
+  bufferSize: 1024
+
+metricsCollector:
+  # 从 Prometheus 收集指标配置
+  enabled: true
+  source: "prometheus"  # 数据源类型：prometheus
+  prometheus:
+    url: "http://prometheus:9090"
+    timeout: "30s"
+    queryInterval: "1m"
+    lookbackWindow: "5m"
+    # Prometheus 查询配置
+    queries:
+      - name: "system_cpu_usage"
+        query: "100 - (avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)"
+        labels: ["instance", "job"]
+      - name: "system_memory_usage"
+        query: "100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)"
+        labels: ["instance", "job"]
+      - name: "pod_cpu_usage"
+        query: "rate(container_cpu_usage_seconds_total{namespace=~\"default|milvus-system\"}[5m])"
+        labels: ["namespace", "pod", "container"]
+      - name: "pod_memory_usage"
+        query: "container_memory_usage_bytes{namespace=~\"default|milvus-system\"}"
+        labels: ["namespace", "pod", "container"]
+      - name: "milvus_query_rate"
+        query: "rate(milvus_query_total[5m])"
+        labels: ["instance", "type"]
+      - name: "milvus_query_latency"
+        query: "histogram_quantile(0.95, rate(milvus_query_duration_seconds_bucket[5m]))"
+        labels: ["instance", "type"]
+      - name: "diagnostic_agent_metrics"
+        query: "milvus_diagnostic_agent_coredumps_processed_total"
+        labels: ["instance"]
+  collectionInterval: "30s" 
+  retentionPeriod: "7d"
+
+reporter:
+  # 报告生成配置
+  enabled: true
+  outputPath: "./reports"
+  retentionPeriod: "30d"
+  schedule:
+    daily: true
+    weekly: true
+    monthly: false
+    dailyAt: "06:00"
+    weeklyAt: "Sunday 08:00"
+  templates:
+    defaultTemplate: "standard"
+    format: "html"
+    customTemplates:
+      detailed: "./templates/detailed_report.html"
+  delivery:
+    storage:
+      enabled: true
+      path: "./reports"
+      maxReports: 100
+    email:
+      enabled: false
+      smtpHost: ""
+      smtpPort: 587
+      username: ""
+      password: ""
+      from: ""
+      recipients: []
+      subject: "Milvus System Health Report"
+    webhook:
+      enabled: false
+      url: ""
+      method: "POST"
+      timeout: "30s"
+  includeMetrics:
+    - "system_health"
+    - "coredump_analysis"
+    - "error_trends"
+    - "performance_summary"

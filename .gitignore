@@ -8,20 +8,21 @@
 # Test binary, built with `go test -c`
 *.test
 
-# Output of the go coverage tool, specifically when used with LiteIDE
+# Output of the go coverage tool
 *.out
 coverage.out
 coverage.html
 
-# Dependency directories (remove the comment below to include it)
-# vendor/
+# Dependency directories
+vendor/
 
 # Go workspace file
 go.work
 
-# Binary output
-milvus-coredump-agent
-main
+# Binary outputs
+/milvus-coredump-agent
+/milvus-coredump-controller
+/main
 
 # IDE specific files
 .idea/
@@ -47,14 +48,62 @@ Thumbs.db
 # Local environment files
 .env
 .env.local
+.env.*.local
 
 # Build artifacts
 dist/
 build/
+generated/
 
 # Debug files
 debug
 
-# Local configuration overrides
+# Local data directories
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Kubernetes secrets and local configs
 configs/local.yaml
 configs/*.local.yaml
+configs/secrets/
+
+# Helm generated files (but don't ignore helm/ directory)
+*.tgz
+/charts/
+!helm/
+
+# Runtime logs
+*.log
+agent*.log
+
+# Test artifacts
+test-crash-pod.yaml
+test-*.yaml
+*-test.yaml
+
+# Backup files
+*.bak
+*.backup
+
+# Docker build context
+.dockerignore.bak
+
+# Local development overrides
+docker-compose.override.yml
+docker-compose.local.yml
+
+# Certificate and key files
+*.pem
+*.key
+*.crt
+*.csr
+
+# Local Kubernetes configs
+kubeconfig
+*.kubeconfig
+
+# Temporary Helm values (but keep helm/ directory)
+*-values.yaml
+!helm/**

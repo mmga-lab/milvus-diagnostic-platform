@@ -12,9 +12,9 @@ import (
 	"k8s.io/klog/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"milvus-coredump-agent/pkg/config"
-	"milvus-coredump-agent/pkg/discovery"
-	"milvus-coredump-agent/pkg/storage"
+	"milvus-diagnostic-platform/pkg/config"
+	"milvus-diagnostic-platform/pkg/discovery"
+	"milvus-diagnostic-platform/pkg/storage"
 )
 
 type Cleaner struct {

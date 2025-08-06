@@ -1,24 +1,24 @@
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: milvus-coredump-agent
+  name: milvus-diagnostic-agent
   namespace: default
   labels:
-    app: milvus-coredump-agent
+    app: milvus-diagnostic-agent
 spec:
   selector:
     matchLabels:
-      app: milvus-coredump-agent
+      app: milvus-diagnostic-agent
   template:
     metadata:
       labels:
-        app: milvus-coredump-agent
+        app: milvus-diagnostic-agent
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "8080"
         prometheus.io/path: "/metrics"
     spec:
-      serviceAccountName: milvus-coredump-agent
+      serviceAccountName: milvus-diagnostic-agent
       hostNetwork: true
       hostPID: true
       tolerations:
@@ -30,10 +30,10 @@ spec:
         effect: NoSchedule
       containers:
       - name: agent
-        image: milvus-coredump-agent:latest
+        image: milvus-diagnostic-platform:latest
         imagePullPolicy: Never
         command:
-        - /bin/milvus-coredump-agent
+        - /bin/milvus-diagnostic-agent
         - --config=/etc/agent/config.yaml
         env:
         - name: NODE_NAME
@@ -52,7 +52,7 @@ spec:
         - name: OPENAI_API_KEY
           valueFrom:
             secretKeyRef:
-              name: milvus-coredump-agent-secrets
+              name: milvus-diagnostic-agent-secrets
               key: openai-api-key
               optional: true
         - name: OPENAI_BASE_URL
@@ -63,6 +63,9 @@ spec:
           protocol: TCP
         - containerPort: 8081
           name: health
+          protocol: TCP
+        - containerPort: 8082
+          name: dashboard
           protocol: TCP
         livenessProbe:
           httpGet:
@@ -111,7 +114,7 @@ spec:
       volumes:
       - name: config
         configMap:
-          name: milvus-coredump-agent-config
+          name: milvus-diagnostic-agent-config
       - name: host-coredump
         hostPath:
           path: /var/lib/systemd/coredump

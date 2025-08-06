@@ -1,0 +1,195 @@
+<!-- Dashboard Overview Template -->
+<div class="px-4 sm:px-6 lg:px-8">
+    <!-- Header -->
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">
+            <i class="fas fa-chart-bar text-primary-600 mr-3"></i>系统总览
+        </h1>
+        <p class="mt-2 text-sm text-gray-600">Milvus Coredump Agent 运行状态和统计信息</p>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
+        <!-- Instances Count -->
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-server text-primary-500 text-2xl"></i>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 truncate">发现的实例</dt>
+                            <dd class="text-3xl font-bold text-gray-900">{{.Summary.MilvusInstances}}</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Total Coredumps -->
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-file-medical text-yellow-500 text-2xl"></i>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 truncate">总计Coredumps</dt>
+                            <dd class="text-3xl font-bold text-gray-900">{{.Summary.TotalCoredumps}}</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Processed Today -->
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-clock text-blue-500 text-2xl"></i>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 truncate">今日处理</dt>
+                            <dd class="text-3xl font-bold text-gray-900">{{.Summary.ProcessedToday}}</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- High Value Count -->
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-star text-green-500 text-2xl"></i>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 truncate">高价值文件</dt>
+                            <dd class="text-3xl font-bold text-gray-900">{{.Summary.HighValueCoredumps}}</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts and Activities Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <!-- Processing Trends Chart -->
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                    <i class="fas fa-chart-line text-blue-500 mr-2"></i>处理趋势
+                </h3>
+                <div class="h-64 flex items-center justify-center text-gray-400">
+                    <div class="text-center">
+                        <i class="fas fa-chart-line text-6xl mb-4"></i>
+                        <p>图表功能开发中</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Score Distribution -->
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                    <i class="fas fa-chart-pie text-green-500 mr-2"></i>价值分布
+                </h3>
+                <div class="h-64 flex items-center justify-center text-gray-400">
+                    <div class="text-center">
+                        <i class="fas fa-chart-pie text-6xl mb-4"></i>
+                        <p>图表功能开发中</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Activities -->
+    <div class="bg-white shadow rounded-lg">
+        <div class="px-4 py-5 sm:p-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                <i class="fas fa-clock text-purple-500 mr-2"></i>最近活动
+            </h3>
+            
+            {{if .RecentActivities}}
+                <div class="flow-root">
+                    <ul class="-mb-8">
+                        {{range $index, $activity := .RecentActivities}}
+                        <li>
+                            <div class="relative pb-8">
+                                {{if ne $index (len $.RecentActivities | sub 1)}}
+                                <span class="absolute top-5 left-5 -ml-px h-full w-0.5 bg-gray-200" aria-hidden="true"></span>
+                                {{end}}
+                                <div class="relative flex items-start space-x-3">
+                                    <div class="relative">
+                                        <div class="h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center ring-8 ring-white">
+                                            <i class="fas fa-file-medical text-white text-sm"></i>
+                                        </div>
+                                    </div>
+                                    <div class="min-w-0 flex-1">
+                                        <div>
+                                            <div class="text-sm">
+                                                <span class="font-medium text-gray-900">新 Coredump 文件</span>
+                                            </div>
+                                            <p class="mt-0.5 text-sm text-gray-500">{{$activity.File.ModTime | formatTime}}</p>
+                                        </div>
+                                        <div class="mt-2 text-sm text-gray-700">
+                                            <p><strong>文件:</strong> {{$activity.File.FileName}}</p>
+                                            <p><strong>实例:</strong> {{$activity.InstanceName}}</p>
+                                            <p>
+                                                <strong>评分:</strong> 
+                                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                                    {{if ge $activity.ValueScore 7.0}}bg-green-100 text-green-800
+                                                    {{else if ge $activity.ValueScore 4.0}}bg-yellow-100 text-yellow-800
+                                                    {{else}}bg-red-100 text-red-800{{end}}">
+                                                    {{printf "%.1f" $activity.ValueScore}}
+                                                </span>
+                                                <strong class="ml-3">大小:</strong> {{$activity.File.Size | formatFileSize}}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </li>
+                        {{end}}
+                    </ul>
+                </div>
+            {{else}}
+                <div class="text-center py-6">
+                    <i class="fas fa-clock text-gray-400 text-4xl mb-4"></i>
+                    <p class="text-gray-500">暂无最近活动</p>
+                </div>
+            {{end}}
+        </div>
+    </div>
+
+    <!-- System Status Footer -->
+    <div class="mt-6 bg-white shadow rounded-lg">
+        <div class="px-4 py-5 sm:p-6">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center">
+                    <div class="flex items-center space-x-2">
+                        {{if eq .Summary.AgentStatus "running"}}
+                            <div class="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                            <span class="text-sm text-gray-600">Agent 运行正常</span>
+                        {{else}}
+                            <div class="w-3 h-3 bg-red-500 rounded-full"></div>
+                            <span class="text-sm text-gray-600">Agent 离线</span>
+                        {{end}}
+                    </div>
+                </div>
+                <div class="text-sm text-gray-500">
+                    最后更新: <span id="last-updated">{{.Summary.LastUpdated | formatTime}}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,39 @@
+{{- if .Values.rbac.create -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "milvus-coredump-agent.fullname" . }}
+  labels:
+    {{- include "milvus-coredump-agent.labels" . | nindent 4 }}
+rules:
+- apiGroups: [""]
+  resources: ["pods", "nodes", "namespaces", "events", "services", "endpoints"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["pods", "pods/log"]
+  verbs: ["get", "list", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "daemonsets", "replicasets"]
+  verbs: ["get", "list", "watch", "delete"]
+- apiGroups: [""]
+  resources: ["persistentvolumes", "persistentvolumeclaims"]
+  verbs: ["get", "list"]
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["pods", "nodes"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "milvus-coredump-agent.fullname" . }}
+  labels:
+    {{- include "milvus-coredump-agent.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "milvus-coredump-agent.fullname" . }}
+subjects:
+- kind: ServiceAccount
+  name: {{ include "milvus-coredump-agent.serviceAccountName" . }}
+  namespace: {{ .Values.global.namespace }}
+{{- end }}

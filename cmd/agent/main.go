@@ -14,13 +14,16 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 
-	"milvus-coredump-agent/pkg/analyzer"
-	"milvus-coredump-agent/pkg/cleaner"
-	"milvus-coredump-agent/pkg/collector"
-	"milvus-coredump-agent/pkg/config"
-	"milvus-coredump-agent/pkg/discovery"
-	"milvus-coredump-agent/pkg/monitor"
-	"milvus-coredump-agent/pkg/storage"
+	"milvus-diagnostic-platform/pkg/analyzer"
+	"milvus-diagnostic-platform/pkg/cleaner"
+	"milvus-diagnostic-platform/pkg/collector"
+	"milvus-diagnostic-platform/pkg/config"
+	"milvus-diagnostic-platform/pkg/controller"
+	"milvus-diagnostic-platform/pkg/dashboard"
+	"milvus-diagnostic-platform/pkg/database"
+	"milvus-diagnostic-platform/pkg/discovery"
+	"milvus-diagnostic-platform/pkg/monitor"
+	"milvus-diagnostic-platform/pkg/storage"
 )
 
 var (
@@ -76,11 +79,47 @@ type Agent struct {
 func (a *Agent) Run(ctx context.Context) error {
 	klog.Info("Initializing agent components")
 
+	// Initialize database
+	dbConfig := &database.Config{
+		Path:            a.config.Database.Path,
+		MaxOpenConns:    a.config.Database.MaxOpenConns,
+		MaxIdleConns:    a.config.Database.MaxIdleConns,
+		ConnMaxLifetime: a.config.Database.ConnMaxLifetime,
+	}
+	
+	db, err := database.New(dbConfig)
+	if err != nil {
+		return fmt.Errorf("failed to initialize database: %w", err)
+	}
+	defer db.Close()
+
+	// Initialize controller client if controller URL is configured
+	var controllerClient *controller.Client
+	if a.config.Controller.Enabled && a.config.Controller.URL != "" {
+		controllerConfig := &controller.ClientConfig{
+			ControllerURL:     a.config.Controller.URL,
+			Timeout:          a.config.Controller.Timeout,
+			HeartbeatInterval: a.config.Controller.HeartbeatInterval,
+			NodeName:         a.config.Agent.NodeName,
+			Version:          version,
+		}
+		controllerClient = controller.NewClient(controllerConfig)
+		
+		// Start controller client (begins heartbeat)
+		go func() {
+			if err := controllerClient.Start(ctx); err != nil {
+				klog.Errorf("Controller client failed: %v", err)
+			}
+		}()
+	} else {
+		klog.Info("Controller client disabled or not configured")
+	}
+
 	discoveryManager := discovery.New(a.kubeClient, &a.config.Discovery)
 	
 	collectorManager := collector.New(&a.config.Collector, discoveryManager)
 	
-	analyzerManager := analyzer.New(&a.config.Analyzer)
+	analyzerManager := analyzer.New(&a.config.Analyzer, controllerClient)
 	
 	storageManager, err := storage.New(&a.config.Storage, &a.config.Analyzer)
 	if err != nil {
@@ -94,6 +133,21 @@ func (a *Agent) Run(ctx context.Context) error {
 		monitorManager = monitor.New(&a.config.Monitor)
 	}
 
+	// 创建Dashboard服务器
+	var dashboardServer *dashboard.Server
+	if a.config.Dashboard.Enabled {
+		dashboardServer = dashboard.NewServer(
+			&a.config.Dashboard,
+			a.kubeClient,
+			discoveryManager,
+			collectorManager,
+			analyzerManager,
+			storageManager,
+			cleanerManager,
+			db,
+		)
+	}
+
 	klog.Info("Starting health and metrics servers")
 	go a.startHealthServer(ctx)
 	if monitorManager != nil {
@@ -102,7 +156,15 @@ func (a *Agent) Run(ctx context.Context) error {
 
 	klog.Info("Starting agent components")
 	
-	errChan := make(chan error, 5)
+	errChan := make(chan error, 6)
+
+	if dashboardServer != nil {
+		go func() {
+			if err := dashboardServer.Start(ctx); err != nil {
+				errChan <- fmt.Errorf("dashboard server failed: %w", err)
+			}
+		}()
+	}
 
 	go func() {
 		if err := discoveryManager.Start(ctx); err != nil {

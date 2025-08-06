@@ -1,0 +1,23 @@
+apiVersion: v2
+name: milvus-diagnostic-platform
+description: A comprehensive diagnostic and monitoring platform for Milvus deployments with AI-powered analysis
+type: application
+version: 0.2.0
+appVersion: "2.0.0"
+keywords:
+  - milvus
+  - diagnostic
+  - monitoring
+  - observability
+  - kubernetes
+  - daemonset
+  - logs
+  - metrics
+home: https://github.com/milvus-io/diagnostic-platform
+sources:
+  - https://github.com/milvus-io/diagnostic-platform
+maintainers:
+  - name: Milvus Team
+    email: milvus@zilliz.com
+annotations:
+  category: Infrastructure

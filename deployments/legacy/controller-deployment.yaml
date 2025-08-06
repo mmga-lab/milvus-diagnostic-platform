@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: milvus-coredump-controller
+  namespace: default
+  labels:
+    app: milvus-coredump-controller
+    component: controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: milvus-coredump-controller
+  template:
+    metadata:
+      labels:
+        app: milvus-coredump-controller
+        component: controller
+    spec:
+      serviceAccountName: milvus-coredump-agent
+      containers:
+      - name: controller
+        image: milvus-coredump-agent:latest
+        imagePullPolicy: Always
+        command: ["/opt/milvus-coredump-agent/controller"]
+        args:
+          - "--config=/etc/controller/config.yaml"
+          - "--http-addr=:8090"
+          - "--metrics-addr=:8091"
+        ports:
+        - name: http-api
+          containerPort: 8090
+          protocol: TCP
+        - name: metrics
+          containerPort: 8091
+          protocol: TCP
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8090
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8090
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+        - name: config
+          mountPath: /etc/controller
+          readOnly: true
+        - name: data
+          mountPath: /data
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: config
+        configMap:
+          name: milvus-coredump-controller-config
+      - name: data
+        persistentVolumeClaim:
+          claimName: milvus-coredump-controller-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: milvus-coredump-controller
+  namespace: default
+  labels:
+    app: milvus-coredump-controller
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8090
+    targetPort: 8090
+    protocol: TCP
+    name: http-api
+  - port: 8091
+    targetPort: 8091
+    protocol: TCP
+    name: metrics
+  selector:
+    app: milvus-coredump-controller
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: milvus-coredump-controller-data
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi

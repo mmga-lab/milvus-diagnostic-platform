@@ -1,0 +1,158 @@
+{{- if .Values.agent.enabled }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "milvus-coredump-agent.fullname" . }}-agent
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "milvus-coredump-agent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: agent
+spec:
+  selector:
+    matchLabels:
+      {{- include "milvus-coredump-agent.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: agent
+  updateStrategy:
+    {{- toYaml .Values.agent.updateStrategy | nindent 4 }}
+  template:
+    metadata:
+      labels:
+        {{- include "milvus-coredump-agent.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: agent
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/agent-configmap.yaml") . | sha256sum }}
+        {{- if .Values.monitoring.prometheus.enabled }}
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "milvus-coredump-agent.serviceAccountName" . }}
+      {{- if .Values.agent.hostNetwork }}
+      hostNetwork: true
+      {{- end }}
+      {{- if .Values.agent.hostPID }}
+      hostPID: true
+      {{- end }}
+      {{- with .Values.agent.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.agent.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: agent
+        image: {{ include "milvus-coredump-agent.agent.image" . }}
+        imagePullPolicy: {{ include "milvus-coredump-agent.agent.pullPolicy" . }}
+        command:
+        - /bin/milvus-coredump-agent
+        - --config=/etc/agent/config.yaml
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        {{- if .Values.external.glmApiKey.secret }}
+        - name: GLM_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.external.glmApiKey.secret }}
+              key: {{ .Values.external.glmApiKey.key }}
+        {{- end }}
+        ports:
+        - name: metrics
+          containerPort: 8080
+          protocol: TCP
+        - name: health
+          containerPort: 8081
+          protocol: TCP
+        {{- if .Values.dashboard.enabled }}
+        - name: dashboard
+          containerPort: {{ .Values.dashboard.port }}
+          protocol: TCP
+        {{- end }}
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: health
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: health
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          {{- toYaml .Values.agent.resources | nindent 10 }}
+        volumeMounts:
+        - name: config
+          mountPath: /etc/agent
+          readOnly: true
+        - name: host-coredump
+          mountPath: /host/var/lib/systemd/coredump
+          readOnly: true
+        - name: data
+          mountPath: /data
+        - name: proc
+          mountPath: /host/proc
+          readOnly: true
+        - name: sys
+          mountPath: /host/sys
+          readOnly: true
+        {{- if .Values.dashboard.enabled }}
+        - name: dashboard-static
+          mountPath: /opt/milvus-coredump-agent/web/static
+          readOnly: true
+        {{- end }}
+        securityContext:
+          {{- if .Values.agent.privileged }}
+          privileged: true
+          {{- end }}
+          runAsNonRoot: {{ .Values.securityContext.runAsNonRoot }}
+          runAsUser: {{ .Values.securityContext.runAsUser }}
+          capabilities:
+            add:
+            - SYS_PTRACE
+            - SYS_ADMIN
+            - DAC_OVERRIDE
+      volumes:
+      - name: config
+        configMap:
+          name: {{ include "milvus-coredump-agent.fullname" . }}-agent-config
+      - name: host-coredump
+        hostPath:
+          path: /var/lib/systemd/coredump
+          type: DirectoryOrCreate
+      - name: data
+        hostPath:
+          path: /var/lib/milvus-coredump-agent
+          type: DirectoryOrCreate
+      - name: proc
+        hostPath:
+          path: /proc
+          type: Directory
+      - name: sys
+        hostPath:
+          path: /sys
+          type: Directory
+      {{- if .Values.dashboard.enabled }}
+      - name: dashboard-static
+        configMap:
+          name: {{ include "milvus-coredump-agent.fullname" . }}-dashboard-static
+      {{- end }}
+{{- end }}

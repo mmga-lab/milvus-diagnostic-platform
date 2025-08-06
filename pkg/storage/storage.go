@@ -14,9 +14,9 @@ import (
 	"k8s.io/klog/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"milvus-coredump-agent/pkg/analyzer"
-	"milvus-coredump-agent/pkg/collector"
-	"milvus-coredump-agent/pkg/config"
+	"milvus-diagnostic-platform/pkg/analyzer"
+	"milvus-diagnostic-platform/pkg/collector"
+	"milvus-diagnostic-platform/pkg/config"
 )
 
 type Storage struct {

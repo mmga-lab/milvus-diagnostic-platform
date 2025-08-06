@@ -1,0 +1,51 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: milvus-coredump-agent-dashboard
+  namespace: default
+  labels:
+    app: milvus-coredump-agent
+    component: dashboard
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header Accept-Encoding "";
+      sub_filter '<head>' '<head><base href="/milvus-coredump-dashboard/">';
+      sub_filter_once on;
+spec:
+  rules:
+  - host: # 设置您的域名，或删除此行使用集群IP
+    http:
+      paths:
+      - path: /milvus-coredump-dashboard(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: milvus-coredump-agent-dashboard
+            port:
+              number: 8082
+---
+# 可选: 用于开发环境的简单Ingress配置
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: milvus-coredump-agent-dashboard-simple
+  namespace: default
+  labels:
+    app: milvus-coredump-agent
+    component: dashboard
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+spec:
+  rules:
+  - host: milvus-dashboard.local  # 可以修改为您的域名
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: milvus-coredump-agent-dashboard
+            port:
+              number: 8082

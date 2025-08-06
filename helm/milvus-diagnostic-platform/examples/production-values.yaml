@@ -1,0 +1,160 @@
+# Production values for milvus-coredump-agent
+# This example shows a production-ready configuration
+
+global:
+  image:
+    repository: milvus-coredump-agent
+    tag: "1.0.0"
+    pullPolicy: Always
+  namespace: milvus-system
+
+# Controller configuration for production
+controller:
+  enabled: true
+  replicaCount: 1
+  
+  # Use more resources for production
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 200m
+      memory: 256Mi
+
+  # Enable persistence with larger storage
+  persistence:
+    enabled: true
+    storageClass: "fast-ssd"
+    size: 50Gi
+
+  # Production-ready configuration
+  config:
+    logLevel: info
+    database:
+      retentionDays: 180  # Keep data longer in production
+    aiAnalysis:
+      enabled: true
+      provider: glm
+      maxCostPerMonth: 500.0  # Higher budget for production
+      maxAnalysisPerHour: 200
+    cleaner:
+      enabled: true
+      maxRestartCount: 3  # More strict in production
+
+  # Place controller on specific nodes
+  nodeSelector:
+    kubernetes.io/os: linux
+    node-role.kubernetes.io/worker: "true"
+  
+  tolerations:
+  - key: dedicated
+    operator: Equal
+    value: monitoring
+    effect: NoSchedule
+
+# Agent configuration for production
+agent:
+  enabled: true
+  
+  # More resources for production workloads
+  resources:
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+
+  # Production-ready configuration
+  config:
+    logLevel: info
+    discovery:
+      scanInterval: 15s  # More frequent scanning
+      namespaces:
+        - default
+        - milvus-system
+        - milvus-prod
+        - milvus-staging
+    collector:
+      watchInterval: 5s  # More responsive collection
+      maxFileAge: 12h    # Shorter retention for faster processing
+      maxFileSize: 2GB   # Allow larger files in production
+    analyzer:
+      enableGdbAnalysis: true
+      gdbTimeout: 10m    # Longer timeout for complex analysis
+      valueThreshold: 6.0  # Higher threshold for production
+    storage:
+      backend: local
+      localPath: /data/coredumps
+      maxStorageSize: 100GB  # More storage space
+      retentionDays: 60      # Keep files longer
+      compressionEnabled: true
+
+  # Production tolerations
+  tolerations:
+  - key: node-role.kubernetes.io/master
+    operator: Exists
+    effect: NoSchedule
+  - key: node-role.kubernetes.io/control-plane
+    operator: Exists
+    effect: NoSchedule
+  - key: dedicated
+    operator: Equal
+    value: milvus
+    effect: NoSchedule
+
+# Enable dashboard for production monitoring
+dashboard:
+  enabled: true
+  port: 8082
+  viewer:
+    enabled: true
+    defaultDuration: 60  # Longer default duration
+    maxConcurrentPods: 5
+
+# Production monitoring
+monitoring:
+  prometheus:
+    enabled: true
+    servicemonitor:
+      enabled: true
+      namespace: monitoring
+      interval: 15s
+  grafana:
+    enabled: true
+
+# RBAC with minimal required permissions
+rbac:
+  create: true
+
+serviceAccount:
+  create: true
+  annotations:
+    # Add any production-specific annotations
+    eks.amazonaws.com/role-arn: "arn:aws:iam::ACCOUNT:role/MilvusCoredumpRole"
+
+# Security context for production
+securityContext:
+  runAsNonRoot: false  # Required for system-level access
+  runAsUser: 0
+  fsGroup: 0
+
+# External dependencies for production
+external:
+  glmApiKey:
+    secret: milvus-coredump-secrets
+    key: glm-api-key
+  
+  # S3 storage configuration (if using external storage)
+  storage:
+    s3:
+      enabled: false  # Set to true if using S3
+      bucket: "milvus-coredump-prod"
+      region: "us-west-2"
+      accessKey:
+        secret: s3-credentials
+        key: access-key
+      secretKey:
+        secret: s3-credentials
+        key: secret-key

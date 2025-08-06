@@ -33,25 +33,59 @@ Key types that flow through the system:
 ```bash
 # Build Docker image
 ./scripts/build.sh
+make docker-build
 
 # Deploy to Kubernetes  
 ./scripts/deploy.sh
+make deploy
 
 # Build with custom image name/tag
 IMAGE_NAME=my-agent IMAGE_TAG=v1.0.0 ./scripts/build.sh
+IMAGE_NAME=my-agent IMAGE_TAG=v1.0.0 make docker-build
 ```
 
 ### Development Commands
 ```bash
 # Run locally (requires kubeconfig)
 go run cmd/agent/main.go --config=configs/config.yaml --kubeconfig=$HOME/.kube/config
+make run
 
 # Build binary only
 go build -o milvus-coredump-agent cmd/agent/main.go
+make build
 
 # Install dependencies
 go mod download
 go mod tidy
+make deps
+make tidy
+```
+
+### Testing and Quality
+```bash
+# Run all tests
+make test
+go test -v -race ./...
+
+# Run single test or package tests
+go test -v ./pkg/analyzer/
+go test -v -run TestAnalyzeCoredumpFile ./pkg/analyzer/
+
+# Run tests with coverage
+make test-coverage
+
+# Run linter (requires golangci-lint)
+make lint
+
+# Format code
+make fmt
+gofmt -s -w .
+
+# Pre-commit checks (fmt, lint, test)
+make pre-commit
+
+# Install development tools
+make install-tools
 ```
 
 ### Monitoring and Debugging
@@ -71,6 +105,14 @@ curl http://localhost:8080/metrics
 kubectl port-forward ds/milvus-coredump-agent 8081:8081  
 curl http://localhost:8081/healthz
 curl http://localhost:8081/readyz
+
+# Access Web Dashboard
+kubectl port-forward ds/milvus-coredump-agent 8082:8082
+# Open http://localhost:8082 in browser
+
+# Or use NodePort service
+kubectl get svc milvus-coredump-agent-dashboard-nodeport
+# Access via http://<node-ip>:30082
 ```
 
 ## Configuration System
@@ -81,6 +123,7 @@ Configuration is managed through `pkg/config/config.go` using Viper. The main co
 - **Analyzer**: Value scoring thresholds and GDB analysis settings
 - **Cleaner**: Restart count thresholds (`maxRestartCount`) and cleanup timing
 - **Storage**: Backend selection and retention policies
+- **Dashboard**: Web dashboard configuration, viewer settings, and UI options
 
 ## Channel-Based Communication
 
@@ -240,6 +283,90 @@ Storage system supports multiple backends via interface:
 
 Files are stored with naming: `{timestamp}_{podName}_{containerName}.core.gz`
 
+## Web Dashboard
+
+The system includes a comprehensive web dashboard for monitoring and managing coredump collection activities.
+
+### Dashboard Features
+
+**Main Overview Page**:
+- Real-time statistics (instances discovered, coredumps processed, high-value files)  
+- Processing trends chart showing coredump activity over time
+- Value score distribution pie chart
+- Recent activities feed
+
+**Instance Management**:
+- List all discovered Milvus instances with deployment type (Helm/Operator)
+- Show instance status, pod counts, and associated coredump files
+- View detailed pod information including restart counts and container status
+- Filter coredumps by specific instance
+
+**Coredump Analysis**:
+- Comprehensive coredump file listing with sorting and filtering
+- Detailed analysis results including GDB output and AI insights
+- Value score breakdown showing how each file was evaluated
+- One-click coredump viewer launcher
+
+### Interactive Coredump Viewer
+
+The dashboard provides a unique **Coredump Viewer** feature that launches temporary Kubernetes pods for interactive debugging:
+
+**Viewer Capabilities**:
+- Launches privileged debugging pods with GDB and analysis tools pre-installed
+- Mounts coredump files from the host filesystem  
+- Provides web-based terminal access via ttyd
+- Automatically expires after configurable duration (default 30 minutes)
+- Supports multiple concurrent viewers with resource limits
+
+**Viewer Workflow**:
+1. User clicks "启动查看器" (Launch Viewer) button on any stored coredump
+2. System creates a temporary Kubernetes pod with debugging tools
+3. Pod mounts the specific coredump file and host filesystem  
+4. Web terminal interface is exposed via Service
+5. User gets direct access to GDB and system debugging tools
+6. Pod automatically cleans up after expiration time
+
+### Dashboard Configuration
+
+```yaml
+dashboard:
+  enabled: true
+  port: 8082
+  path: "/dashboard"  
+  serveStatic: true
+  staticPath: "/opt/milvus-coredump-agent/web/static"
+  viewerNamespace: "default"
+  viewer:
+    enabled: true
+    image: "ubuntu:22.04"
+    defaultDuration: 30  # minutes
+    maxDuration: 120     # minutes  
+    maxConcurrentPods: 3
+    coredumpPath: "/host/var/lib/systemd/coredump"
+    webTerminalPort: 7681
+```
+
+### Dashboard Access Methods
+
+**Development/Testing**:
+```bash
+kubectl port-forward ds/milvus-coredump-agent 8082:8082
+# Access http://localhost:8082
+```
+
+**Production via NodePort**:
+```bash
+kubectl apply -f deployments/dashboard-service.yaml
+# Access http://<node-ip>:30082  
+```
+
+**Production via Ingress**:
+```bash
+kubectl apply -f deployments/dashboard-ingress.yaml
+# Configure DNS: milvus-dashboard.local -> cluster IP
+# Access http://milvus-dashboard.local
+```
+
 ## Testing and Debugging
 
 ### Coredump Generation for Testing
@@ -354,9 +481,44 @@ kubectl logs -l app=milvus-coredump-agent -f | grep "Found coredump file"
 6. **Validate AI analysis** → GLM API integration and structured response
 7. **Verify storage** → Coredump file stored according to retention policy
 
+## Database & Persistence
+
+The system uses SQLite for local persistence with a comprehensive schema supporting:
+
+### Core Tables
+- **milvus_instances**: Discovered Milvus deployments with metadata
+- **pods**: Pod information linked to instances with restart tracking
+- **coredump_files**: Complete coredump metadata and analysis results
+- **analysis_results**: Detailed GDB analysis output (stack traces, crash info)
+- **ai_analysis_results**: AI analysis results with cost tracking
+- **restart_events**: Pod restart event history with panic detection
+- **storage_events**: File storage operation tracking
+- **cleanup_events**: Instance cleanup operation history
+
+### Database Access
+```bash
+# View database content during development
+sqlite3 data/coredump_agent.db ".tables"
+sqlite3 data/coredump_agent.db "SELECT * FROM coredump_files ORDER BY created_at DESC LIMIT 5;"
+sqlite3 data/coredump_agent.db "SELECT * FROM ai_analysis_results WHERE confidence > 0.8;"
+```
+
+## Grafana Dashboard
+
+A pre-built Grafana dashboard is included at `dashboards/grafana-dashboard.json` with panels for:
+- Coredump discovery and processing metrics
+- Value score distributions
+- AI analysis cost tracking
+- Instance and cleanup statistics
+
 ## Recent Improvements
 
-### GLM AI Integration (Latest)
+### Database Integration (Latest)
+- **SQLite Persistence**: Added comprehensive database schema for all operations
+- **Data Analytics**: Enhanced dashboard with historical data and trend analysis
+- **Cost Tracking**: Detailed AI analysis cost tracking per request and monthly limits
+
+### GLM AI Integration  
 - **RESTful API Implementation**: Replaced OpenAI SDK with direct HTTP client for better compatibility
 - **GLM-4.5-Flash Support**: Integrated ChatGLM as primary AI provider
 - **Parameter Debugging**: Fixed GLM API parameter format issues with consistent temperature/maxTokens values
@@ -375,3 +537,26 @@ kubectl logs -l app=milvus-coredump-agent -f | grep "Found coredump file"
 - **Pre-built Crash Program**: Created `Dockerfile.crasher` with compiled crash test binary
 - **Automated Testing**: Developed systematic testing approach for complete workflow verification
 - **Real Coredump Generation**: Moved from simulated to actual binary coredump files for GDB compatibility
+
+## Test Files
+
+Unit tests are located alongside their respective packages:
+- `pkg/analyzer/analyzer_basic_test.go` - Analyzer component tests
+- `pkg/collector/collector_basic_test.go` - Collector component tests
+- `pkg/discovery/discovery_basic_test.go` - Discovery component tests
+- `pkg/config/config_basic_test.go` - Configuration tests
+
+## Makefile Targets
+
+Key make targets for development:
+- `make all` - Run lint, test, and build
+- `make build` - Build the binary with proper version info
+- `make test` - Run tests with race detection
+- `make test-coverage` - Generate HTML coverage report
+- `make lint` - Run golangci-lint or go vet
+- `make fmt` - Format all Go code
+- `make docker-build` - Build Docker image with version metadata
+- `make docker-push` - Build and push Docker image
+- `make deploy` - Deploy to Kubernetes cluster
+- `make run` - Run locally with kubeconfig
+- `make pre-commit` - Run all checks before committing

@@ -14,8 +14,8 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"milvus-coredump-agent/pkg/collector"
-	"milvus-coredump-agent/pkg/config"
+	"milvus-diagnostic-platform/pkg/collector"
+	"milvus-diagnostic-platform/pkg/config"
 )
 
 type AIAnalyzer struct {

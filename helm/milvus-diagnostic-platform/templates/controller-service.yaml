@@ -1,0 +1,30 @@
+{{- if .Values.controller.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "milvus-coredump-agent.fullname" . }}-controller
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "milvus-coredump-agent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: controller
+  {{- if .Values.monitoring.prometheus.enabled }}
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: {{ .Values.controller.service.metrics.port | quote }}
+    prometheus.io/path: "/metrics"
+  {{- end }}
+spec:
+  type: {{ .Values.controller.service.type }}
+  ports:
+  - port: {{ .Values.controller.service.api.port }}
+    targetPort: {{ .Values.controller.service.api.targetPort }}
+    protocol: TCP
+    name: http-api
+  - port: {{ .Values.controller.service.metrics.port }}
+    targetPort: {{ .Values.controller.service.metrics.targetPort }}
+    protocol: TCP
+    name: metrics
+  selector:
+    {{- include "milvus-coredump-agent.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: controller
+{{- end }}

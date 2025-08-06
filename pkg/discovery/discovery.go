@@ -13,7 +13,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
-	"milvus-coredump-agent/pkg/config"
+	"milvus-diagnostic-platform/pkg/config"
 )
 
 type Discovery struct {
@@ -47,6 +47,14 @@ func (d *Discovery) Start(ctx context.Context) error {
 
 func (d *Discovery) GetRestartChannel() <-chan RestartEvent {
 	return d.restartChan
+}
+
+func (d *Discovery) GetDiscoveredInstances() []*MilvusInstance {
+	var instances []*MilvusInstance
+	for _, instance := range d.instances {
+		instances = append(instances, instance)
+	}
+	return instances
 }
 
 func (d *Discovery) GetInstances() map[string]*MilvusInstance {

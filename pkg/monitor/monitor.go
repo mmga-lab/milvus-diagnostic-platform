@@ -8,11 +8,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"k8s.io/klog/v2"
 
-	"milvus-coredump-agent/pkg/analyzer"
-	"milvus-coredump-agent/pkg/cleaner"
-	"milvus-coredump-agent/pkg/collector"
-	"milvus-coredump-agent/pkg/config"
-	"milvus-coredump-agent/pkg/storage"
+	"milvus-diagnostic-platform/pkg/analyzer"
+	"milvus-diagnostic-platform/pkg/cleaner"
+	"milvus-diagnostic-platform/pkg/collector"
+	"milvus-diagnostic-platform/pkg/config"
+	"milvus-diagnostic-platform/pkg/storage"
 )
 
 type Monitor struct {

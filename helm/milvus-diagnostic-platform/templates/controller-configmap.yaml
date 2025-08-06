@@ -1,0 +1,75 @@
+{{- if .Values.controller.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "milvus-coredump-agent.fullname" . }}-controller-config
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "milvus-coredump-agent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: controller
+data:
+  config.yaml: |
+    agent:
+      name: {{ include "milvus-coredump-agent.fullname" . }}-controller
+      nodeName: "${NODE_NAME:-controller}"
+      namespace: {{ .Values.global.namespace | quote }}
+      logLevel: {{ .Values.controller.config.logLevel | quote }}
+      metricsPort: {{ .Values.controller.service.metrics.targetPort }}
+      healthPort: {{ .Values.controller.service.api.targetPort }}
+
+    database:
+      path: "/data/controller.db"
+      maxOpenConns: 20
+      maxIdleConns: 10
+      connMaxLifetime: "1h"
+      retentionDays: {{ .Values.controller.config.database.retentionDays }}
+
+    discovery:
+      scanInterval: {{ .Values.agent.config.discovery.scanInterval | quote }}
+      namespaces:
+        {{- range .Values.agent.config.discovery.namespaces }}
+        - {{ . | quote }}
+        {{- end }}
+      helmReleaseLabels:
+        - "app.kubernetes.io/name=milvus"
+      operatorLabels:
+        - "app.kubernetes.io/managed-by=milvus-operator"
+
+    analyzer:
+      enableGdbAnalysis: {{ .Values.agent.config.analyzer.enableGdbAnalysis }}
+      gdbTimeout: {{ .Values.agent.config.analyzer.gdbTimeout | quote }}
+      valueThreshold: {{ .Values.agent.config.analyzer.valueThreshold }}
+      ignorePatterns: ["pause", "fluentd"]
+      panicKeywords: ["panic", "fatal", "SIGSEGV", "SIGABRT", "SIGFPE", "stack trace"]
+      
+      aiAnalysis:
+        enabled: {{ .Values.controller.config.aiAnalysis.enabled }}
+        provider: {{ .Values.controller.config.aiAnalysis.provider | quote }}
+        model: {{ .Values.controller.config.aiAnalysis.model | quote }}
+        apiKey: "${GLM_API_KEY}"
+        baseURL: "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+        timeout: "30s"
+        maxTokens: 2000
+        temperature: 0.3
+        enableCostControl: true
+        maxCostPerMonth: {{ .Values.controller.config.aiAnalysis.maxCostPerMonth }}
+        maxAnalysisPerHour: {{ .Values.controller.config.aiAnalysis.maxAnalysisPerHour }}
+
+    storage:
+      backend: {{ .Values.agent.config.storage.backend | quote }}
+      localPath: {{ .Values.agent.config.storage.localPath | quote }}
+      maxStorageSize: {{ .Values.agent.config.storage.maxStorageSize | quote }}
+      retentionDays: {{ .Values.agent.config.storage.retentionDays }}
+      compressionEnabled: {{ .Values.agent.config.storage.compressionEnabled }}
+
+    cleaner:
+      enabled: {{ .Values.controller.config.cleaner.enabled }}
+      maxRestartCount: {{ .Values.controller.config.cleaner.maxRestartCount }}
+      restartTimeWindow: "1h"
+      cleanupDelay: "5m"
+      uninstallTimeout: "10m"
+
+    monitor:
+      prometheusEnabled: {{ .Values.monitoring.prometheus.enabled }}
+      metricsPath: "/metrics"
+{{- end }}

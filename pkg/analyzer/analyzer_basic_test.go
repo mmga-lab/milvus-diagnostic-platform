@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"milvus-coredump-agent/pkg/collector"
-	"milvus-coredump-agent/pkg/config"
+	"milvus-diagnostic-platform/pkg/collector"
+	"milvus-diagnostic-platform/pkg/config"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 

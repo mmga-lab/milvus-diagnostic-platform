@@ -13,14 +13,22 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the application
+# Build the applications
 ARG VERSION=dev
 ARG BUILD_TIME
 ARG GIT_COMMIT
+
+# Build agent
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags="-w -s -X main.version=${VERSION} -X main.buildTime=${BUILD_TIME} -X main.gitCommit=${GIT_COMMIT}" \
     -o milvus-coredump-agent \
     ./cmd/agent
+
+# Build controller
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags="-w -s -X main.version=${VERSION} -X main.buildTime=${BUILD_TIME} -X main.gitCommit=${GIT_COMMIT}" \
+    -o milvus-coredump-controller \
+    ./cmd/controller
 
 # Runtime stage
 FROM alpine:3.18
@@ -42,11 +50,12 @@ RUN addgroup -g 1000 agent && \
     adduser -D -s /bin/sh -u 1000 -G agent agent
 
 # Create directories
-RUN mkdir -p /data/coredumps /etc/agent && \
+RUN mkdir -p /data/coredumps /etc/agent /opt/milvus-coredump-agent && \
     chown -R agent:agent /data
 
-# Copy binary from builder
+# Copy binaries from builder
 COPY --from=builder /app/milvus-coredump-agent /bin/milvus-coredump-agent
+COPY --from=builder /app/milvus-coredump-controller /opt/milvus-coredump-agent/controller
 
 # Copy default configuration
 COPY --from=builder /app/configs/config.yaml /etc/agent/config.yaml

@@ -12,8 +12,8 @@ import (
 	"k8s.io/klog/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"milvus-coredump-agent/pkg/config"
-	"milvus-coredump-agent/pkg/discovery"
+	"milvus-diagnostic-platform/pkg/config"
+	"milvus-diagnostic-platform/pkg/discovery"
 )
 
 type Collector struct {
@@ -22,6 +22,7 @@ type Collector struct {
 	eventChan      chan CollectionEvent
 	stopChan       chan struct{}
 	processedFiles map[string]bool
+	coredumpFiles  map[string]*CoredumpFile
 }
 
 var (
@@ -36,6 +37,7 @@ func New(config *config.CollectorConfig, discovery *discovery.Discovery) *Collec
 		eventChan:      make(chan CollectionEvent, 100),
 		stopChan:       make(chan struct{}),
 		processedFiles: make(map[string]bool),
+		coredumpFiles:  make(map[string]*CoredumpFile),
 	}
 }
 
@@ -52,6 +54,14 @@ func (c *Collector) Start(ctx context.Context) error {
 
 func (c *Collector) GetEventChannel() <-chan CollectionEvent {
 	return c.eventChan
+}
+
+func (c *Collector) GetProcessedFiles() []*CoredumpFile {
+	var files []*CoredumpFile
+	for _, file := range c.coredumpFiles {
+		files = append(files, file)
+	}
+	return files
 }
 
 func (c *Collector) watchRestartEvents(ctx context.Context) {
@@ -298,6 +308,7 @@ func (c *Collector) isRelatedToRestart(coredump *CoredumpFile, event discovery.R
 
 func (c *Collector) processCoredumpFile(coredump *CoredumpFile) {
 	c.processedFiles[coredump.Path] = true
+	c.coredumpFiles[coredump.Path] = coredump
 	
 	klog.Infof("Processing coredump file: %s", coredump.Path)
 	
@@ -317,6 +328,3 @@ func (c *Collector) processCoredumpFile(coredump *CoredumpFile) {
 	}
 }
 
-func (c *Collector) GetProcessedFiles() map[string]bool {
-	return c.processedFiles
-}
