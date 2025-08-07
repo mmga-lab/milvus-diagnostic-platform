@@ -54,6 +54,30 @@ go mod download
 go mod tidy
 ```
 
+### Testing Commands
+```bash
+# Run all tests
+make test
+
+# Run tests with coverage
+make test-coverage
+
+# Run specific package tests
+go test -v ./pkg/discovery/...
+go test -v ./pkg/collector/...
+go test -v ./pkg/analyzer/...
+
+# Run tests without K8s (using mocks)
+go test -v ./pkg/... -tags=unit
+
+# Run linting and formatting
+make lint
+make fmt
+
+# Pre-commit checks (fmt, lint, test)
+make pre-commit
+```
+
 ### Monitoring and Debugging
 ```bash
 # Check DaemonSet status
@@ -94,6 +118,15 @@ analyzerManager.Start(ctx, collectorEvents)
 analyzerEvents := analyzerManager.GetEventChannel()  
 storageManager.Start(ctx, analyzerEvents)
 ```
+
+### Event Flow Pattern
+Components communicate asynchronously through typed events:
+1. **Discovery** → `RestartEvent` → **Collector**
+2. **Collector** → `CoredumpFile` → **Analyzer**  
+3. **Analyzer** → `AnalysisResults` → **Storage**
+4. **Storage** → `StorageEvent` → **Cleaner**
+
+Each component processes events in goroutines to avoid blocking.
 
 ## Milvus Instance Detection
 
@@ -223,6 +256,21 @@ aiAnalysis:
 - **Error Handling**: Comprehensive logging and graceful degradation on API failures
 - **Response Parsing**: Extracts JSON from AI responses and validates structure
 
+## Component Initialization Order
+
+The main.go initialization follows a specific order (important for understanding component dependencies):
+
+1. **Config Loading** - Load and validate configuration from YAML
+2. **Kubernetes Client** - Create client (in-cluster or kubeconfig)
+3. **Discovery Manager** - Initialize Pod/instance discovery
+4. **Collector Manager** - Set up coredump file monitoring
+5. **Analyzer Manager** - Initialize GDB and AI analysis
+6. **Storage Manager** - Set up storage backend (local/S3/NFS)
+7. **Cleaner Manager** - Initialize automatic cleanup logic
+8. **Monitor Manager** - Start Prometheus metrics (if enabled)
+9. **Channel Wiring** - Connect component event channels
+10. **Component Start** - Start all components in goroutines
+
 ## Automatic Cleanup Logic
 
 The cleaner tracks restart counts per instance within a time window. When `maxRestartCount` is exceeded:
@@ -239,6 +287,31 @@ Storage system supports multiple backends via interface:
 - **NFS**: Network filesystem storage (placeholder implementation)
 
 Files are stored with naming: `{timestamp}_{podName}_{containerName}.core.gz`
+
+## Testing Without Kubernetes
+
+The project provides comprehensive testing support without requiring a real Kubernetes cluster:
+
+### Mock K8s Client
+Use `pkg/testutil/mock_k8s.go` for simulating Kubernetes API:
+```go
+mockClient := testutil.NewMockK8sClient()
+pod := testutil.CreateMilvusHelmPod("test-pod", "default", "instance", 0)
+mockClient.AddPod(pod)
+```
+
+### Test Data
+- `testdata/gdb_outputs/` - Sample GDB analysis outputs
+- `testdata/k8s/` - Kubernetes resource YAML samples
+- `testdata/configs/` - Test configuration files
+
+### Local File Testing
+```bash
+# Test with local coredump files
+mkdir -p /tmp/test-coredump
+# Place test files in directory
+go test -v ./pkg/collector/... -coredump-path=/tmp/test-coredump
+```
 
 ## Testing and Debugging
 
@@ -375,3 +448,29 @@ kubectl logs -l app=milvus-coredump-agent -f | grep "Found coredump file"
 - **Pre-built Crash Program**: Created `Dockerfile.crasher` with compiled crash test binary
 - **Automated Testing**: Developed systematic testing approach for complete workflow verification
 - **Real Coredump Generation**: Moved from simulated to actual binary coredump files for GDB compatibility
+
+## Important Files and Locations
+
+### Core Business Logic
+- `cmd/agent/main.go` - Entry point and component orchestration
+- `pkg/discovery/discovery.go` - Milvus instance discovery and Pod monitoring
+- `pkg/collector/collector.go` - Coredump file collection and correlation
+- `pkg/analyzer/analyzer.go` - GDB analysis and value scoring
+- `pkg/analyzer/ai_analyzer.go` - AI model integration (GLM/OpenAI)
+- `pkg/storage/storage.go` - Storage backend management
+- `pkg/cleaner/cleaner.go` - Automatic instance cleanup
+
+### Configuration
+- `configs/config.yaml` - Main configuration file (deployed as ConfigMap)
+- `pkg/config/config.go` - Configuration loading and validation
+
+### Deployment
+- `deployments/daemonset.yaml` - DaemonSet deployment manifest
+- `deployments/configmap.yaml` - ConfigMap for configuration
+- `scripts/build.sh` - Docker image build script
+- `scripts/deploy.sh` - Kubernetes deployment script
+
+### Testing
+- `pkg/testutil/mock_k8s.go` - Mock Kubernetes client for testing
+- `pkg/*/..._basic_test.go` - Unit tests for each component
+- `testdata/` - Test fixtures and sample data
